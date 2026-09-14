@@ -43,6 +43,8 @@ jobs:
         run: |
           cd mobile
           flutter pub get
+          # Fix AGP 8 / 9 Proguard deprecation in cached flutter plugins (e.g. flutter_inappwebview_android)
+          find ~/.pub-cache -type f \( -name "*.gradle" -o -name "*.gradle.kts" \) -exec sed -i "s/proguard-android.txt/proguard-android-optimize.txt/g" {} + || true
           flutter build appbundle --release
 
       - name: Upload AAB Artifact
