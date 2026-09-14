@@ -1,0 +1,29 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+
+# Node dependencies
+node_modules/
+
+# Web Build Output
+dist/
+dist-ssr/
+
+# Flutter & Dart Build Artifacts
+mobile/.dart_tool/
+mobile/build/
+mobile/.flutter-plugins
+mobile/.flutter-plugins-dependencies
+mobile/.packages
+mobile/android/app/build/
+mobile/android/.gradle/
+mobile/android/local.properties
+mobile/ios/Flutter/App.framework
+mobile/ios/Flutter/Flutter.framework
+
+# Editor & OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

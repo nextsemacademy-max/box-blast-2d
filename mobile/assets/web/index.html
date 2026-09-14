@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <title>Box Blast 2D</title>
+    <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><defs><radialGradient id='g' cx='35%25' cy='30%25' r='65%25'><stop offset='0%25' stop-color='%23ffffff'/><stop offset='25%25' stop-color='%2338bdf8'/><stop offset='70%25' stop-color='%230284c7'/><stop offset='100%25' stop-color='%23082f49'/></radialGradient></defs><circle cx='12' cy='12' r='10' fill='url(%23g)'/></svg>" />
+    <script type="module" crossorigin src="/assets/index-BLfooEsY.js"></script>
+    <link rel="stylesheet" crossorigin href="/assets/index-DkRPT9jL.css">
+  </head>
+  <body>
+    <div id="app" class="game-wrapper">
+      <!-- Simplified Clean Header -->
+      <header class="hud-header">
+        <div class="header-btn-group">
+          <button id="sound-btn" class="icon-btn-minimal" title="Sound">🔊</button>
+          <button id="help-btn" class="icon-btn-minimal" title="How to Play">❓</button>
+        </div>
+
+        <!-- Hero Score Display -->
+        <div class="score-center">
+          <div id="score-display" class="hud-score-hero">0</div>
+          <div class="best-record-pill">
+            <span class="crown-icon">👑</span>
+            <span id="best-score-display">0</span>
+          </div>
+        </div>
+
+        <div class="header-btn-group right">
+          <button id="restart-btn" class="icon-btn-minimal" title="Restart">🔄</button>
+        </div>
+      </header>
+
+      <!-- Dynamic Floating Combo Banner (Only visible when active) -->
+      <div class="combo-banner-zone">
+        <div id="combo-badge" class="combo-badge hidden">
+          <span class="combo-fire">🔥</span>
+          <span id="combo-text">COMBO x2</span>
+        </div>
+        <div id="streak-indicator" class="hidden"></div>
+      </div>
+
+      <!-- Main Game Board Container -->
+      <main class="board-container">
+        <!-- 8x8 Marble Grid Board -->
+        <div id="grid-board" class="grid-board">
+          <!-- 64 socket cells generated dynamically -->
+        </div>
+
+        <!-- Particle Explosion Canvas Overlay -->
+        <canvas id="particle-canvas" class="particle-canvas"></canvas>
+
+        <!-- Floating Score Text Canvas / Layer -->
+        <div id="floating-text-container" class="floating-text-layer"></div>
+      </main>
+
+      <!-- Hand Dock: 3 Minimal Clean Slots -->
+      <footer class="hand-dock" id="hand-dock">
+        <div class="hand-slot" id="slot-0"></div>
+        <div class="hand-slot" id="slot-1"></div>
+        <div class="hand-slot" id="slot-2"></div>
+      </footer>
+
+      <!-- Dragging Clone Container -->
+      <div id="drag-proxy" class="drag-proxy hidden"></div>
+
+      <!-- How to Play / Lesson Modal -->
+      <div id="tutorial-modal" class="modal-backdrop hidden">
+        <div class="modal-card tutorial-card">
+          <div class="modal-badge">HOW TO PLAY</div>
+          <h2 class="modal-title">Quick Guide</h2>
+          
+          <div class="tutorial-steps">
+            <div class="tutorial-step">
+              <div class="step-icon">🔮</div>
+              <div class="step-content">
+                <strong>1. Drag & Place</strong>
+                <p>Pick marble shapes from the bottom tray and drop them into the board sockets.</p>
+              </div>
+            </div>
+
+            <div class="tutorial-step">
+              <div class="step-icon">💥</div>
+              <div class="step-content">
+                <strong>2. Blast Lines</strong>
+                <p>Fill any complete row or column to clear lines and score points.</p>
+              </div>
+            </div>
+
+            <div class="tutorial-step">
+              <div class="step-icon">⚡</div>
+              <div class="step-content">
+                <strong>3. Chain Combos</strong>
+                <p>Blast lines in consecutive turns to rack up massive combo multipliers!</p>
+              </div>
+            </div>
+
+            <div class="tutorial-step">
+              <div class="step-icon">🧠</div>
+              <div class="step-content">
+                <strong>4. Plan Ahead</strong>
+                <p>Leave space for 3×3 clusters. Game ends when no moves fit!</p>
+              </div>
+            </div>
+          </div>
+
+          <button id="close-tutorial-btn" class="primary-btn">Let's Play 🚀</button>
+        </div>
+      </div>
+
+      <!-- Game Over / Rewarded Revive Modal -->
+      <div id="game-over-modal" class="modal-backdrop hidden">
+        <div class="modal-card">
+          <div class="modal-badge">GAME OVER</div>
+          <h2 class="modal-title">No Moves Left!</h2>
+
+          <div class="modal-scores">
+            <div class="modal-stat">
+              <span>Score</span>
+              <strong id="modal-final-score">0</strong>
+            </div>
+            <div class="modal-stat highlight">
+              <span>Best</span>
+              <strong id="modal-best-score">0</strong>
+            </div>
+          </div>
+
+          <!-- Rewarded Ad Revive Button -->
+          <div class="revive-section">
+            <button id="modal-revive-btn" class="revive-btn">
+              <span class="revive-icon">📺</span>
+              <div class="revive-text">
+                <strong>Revive & Clear Board</strong>
+                <small>Blast center 3x3 orbs to continue</small>
+              </div>
+            </button>
+          </div>
+
+          <button id="modal-restart-btn" class="secondary-btn">New Game</button>
+        </div>
+      </div>
+
+      <!-- Toast Notification -->
+      <div id="toast-message" class="toast-message hidden"></div>
+    </div>
+
+  </body>
+</html>
