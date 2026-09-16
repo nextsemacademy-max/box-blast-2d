@@ -162,6 +162,80 @@ export class GridEngine {
   }
 
   /**
+   * Predicts which rows and columns would be cleared if shape is placed at (startRow, startCol)
+   */
+  public predictClearedLines(shape: ShapeDefinition, startRow: number, startCol: number): { rows: number[]; cols: number[] } {
+    const rows: number[] = [];
+    const cols: number[] = [];
+
+    const matrix = shape.matrix;
+    const shapeRows = matrix.length;
+    const shapeCols = matrix[0].length;
+
+    // Validate placement feasibility
+    for (let r = 0; r < shapeRows; r++) {
+      for (let c = 0; c < shapeCols; c++) {
+        if (matrix[r][c] === 1) {
+          const boardR = startRow + r;
+          const boardC = startCol + c;
+          if (boardR < 0 || boardR >= BOARD_SIZE || boardC < 0 || boardC >= BOARD_SIZE) {
+            return { rows, cols };
+          }
+          if (this.board[boardR][boardC].filled) {
+            return { rows, cols };
+          }
+        }
+      }
+    }
+
+    // 1. Scan rows for potential completion
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      let willBeFull = true;
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        const isCurrentlyFilled = this.board[r][c].filled;
+        const willBeFilledByShape = (
+          r >= startRow &&
+          r < startRow + shapeRows &&
+          c >= startCol &&
+          c < startCol + shapeCols &&
+          matrix[r - startRow][c - startCol] === 1
+        );
+        if (!isCurrentlyFilled && !willBeFilledByShape) {
+          willBeFull = false;
+          break;
+        }
+      }
+      if (willBeFull) {
+        rows.push(r);
+      }
+    }
+
+    // 2. Scan columns for potential completion
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      let willBeFull = true;
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        const isCurrentlyFilled = this.board[r][c].filled;
+        const willBeFilledByShape = (
+          r >= startRow &&
+          r < startRow + shapeRows &&
+          c >= startCol &&
+          c < startCol + shapeCols &&
+          matrix[r - startRow][c - startCol] === 1
+        );
+        if (!isCurrentlyFilled && !willBeFilledByShape) {
+          willBeFull = false;
+          break;
+        }
+      }
+      if (willBeFull) {
+        cols.push(c);
+      }
+    }
+
+    return { rows, cols };
+  }
+
+  /**
    * Rewarded Ad Revive: Clears a 3x3 area around center to free up space
    */
   public clearBombArea(centerR: number = 3, centerC: number = 3): { r: number; c: number }[] {
@@ -178,4 +252,57 @@ export class GridEngine {
     }
     return cleared;
   }
+
+  /**
+   * Counts the total number of currently filled cells on the board
+   */
+  public countFilledCells(): number {
+    let count = 0;
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (this.board[r][c].filled) {
+          count++;
+        }
+      }
+    }
+    return count;
+  }
+
+  /**
+   * Checks whether the entire board is completely empty (Clean Slate)
+   */
+  public isCleanSlate(): boolean {
+    return this.countFilledCells() === 0;
+  }
+
+  /**
+   * Identifies rows and columns that are 1 or 2 blocks away from completing (6 or 7 cells filled)
+   */
+  public getNearCompleteLines(): { rows: number[]; cols: number[] } {
+    const nearRows: number[] = [];
+    const nearCols: number[] = [];
+
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      let filled = 0;
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (this.board[r][c].filled) filled++;
+      }
+      if (filled >= BOARD_SIZE - 2 && filled < BOARD_SIZE) {
+        nearRows.push(r);
+      }
+    }
+
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      let filled = 0;
+      for (let r = 0; r < BOARD_SIZE; r++) {
+        if (this.board[r][c].filled) filled++;
+      }
+      if (filled >= BOARD_SIZE - 2 && filled < BOARD_SIZE) {
+        nearCols.push(c);
+      }
+    }
+
+    return { rows: nearRows, cols: nearCols };
+  }
 }
+

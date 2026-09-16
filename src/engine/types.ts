@@ -28,6 +28,8 @@ export interface DragState {
   currentPointerX: number;
   currentPointerY: number;
   touchOffsetY: number; // Lifts block above touch contact point
+  grabOffsetX?: number; // Relative grab offset for smooth pickup without jumping
+  grabOffsetY?: number;
 }
 
 export interface ClearResult {

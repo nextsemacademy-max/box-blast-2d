@@ -12,9 +12,12 @@ void main() async {
 
   // 1. Start Localhost Server for Offline 60fps HTML5 Engine
   try {
-    await localhostServer.start();
+    if (!localhostServer.isRunning()) {
+      await localhostServer.start();
+      debugPrint('Localhost server started successfully on port 8080');
+    }
   } catch (e) {
-    debugPrint('Localhost server error: $e');
+    debugPrint('Localhost server initial start error: $e');
   }
 
   // 2. Lock Orientation to Portrait (Standard Android 2D Puzzle Game)
@@ -62,12 +65,29 @@ class GameShellScreen extends StatefulWidget {
 
 class _GameShellScreenState extends State<GameShellScreen> {
   InAppWebViewController? webViewController;
+  bool isServerReady = false;
   bool isGameLoaded = false;
+  int retryAttempts = 0;
 
   @override
-  void dispose() {
-    localhostServer.close();
-    super.dispose();
+  void initState() {
+    super.initState();
+    _initLocalServer();
+  }
+
+  Future<void> _initLocalServer() async {
+    try {
+      if (!localhostServer.isRunning()) {
+        await localhostServer.start();
+      }
+    } catch (e) {
+      debugPrint('Error starting localhost server in state: $e');
+    }
+    if (mounted) {
+      setState(() {
+        isServerReady = true;
+      });
+    }
   }
 
   @override
@@ -133,30 +153,43 @@ class _GameShellScreenState extends State<GameShellScreen> {
           },
           child: Stack(
             children: [
-              InAppWebView(
-                initialUrlRequest: URLRequest(
-                  url: WebUri('http://localhost:8080/index.html'),
+              if (isServerReady)
+                InAppWebView(
+                  initialUrlRequest: URLRequest(
+                    url: WebUri('http://localhost:8080/index.html'),
+                  ),
+                  initialSettings: InAppWebViewSettings(
+                    supportZoom: false,
+                    mediaPlaybackRequiresUserGesture: false,
+                    allowsInlineMediaPlayback: true,
+                    useHybridComposition: true,
+                    hardwareAcceleration: true,
+                    transparentBackground: false,
+                    overScrollMode: OverScrollMode.NEVER,
+                    verticalScrollBarEnabled: false,
+                    horizontalScrollBarEnabled: false,
+                    allowFileAccess: true,
+                    allowContentAccess: true,
+                    mixedContentMode: MixedContentMode.MIXED_CONTENT_ALWAYS_ALLOW,
+                  ),
+                  onWebViewCreated: (controller) {
+                    webViewController = controller;
+                  },
+                  onLoadStop: (controller, url) {
+                    setState(() {
+                      isGameLoaded = true;
+                    });
+                  },
+                  onReceivedError: (controller, request, error) {
+                    debugPrint('WebView Error: ${error.description} (code: ${error.type})');
+                    if (retryAttempts < 3 && (request.url.host == 'localhost' || request.url.host == '127.0.0.1')) {
+                      retryAttempts++;
+                      Future.delayed(const Duration(milliseconds: 600), () {
+                        controller.reload();
+                      });
+                    }
+                  },
                 ),
-                initialSettings: InAppWebViewSettings(
-                  supportZoom: false,
-                  mediaPlaybackRequiresUserGesture: false,
-                  allowsInlineMediaPlayback: true,
-                  useHybridComposition: true,
-                  hardwareAcceleration: true,
-                  transparentBackground: false,
-                  overScrollMode: OverScrollMode.NEVER,
-                  verticalScrollBarEnabled: false,
-                  horizontalScrollBarEnabled: false,
-                ),
-                onWebViewCreated: (controller) {
-                  webViewController = controller;
-                },
-                onLoadStop: (controller, url) {
-                  setState(() {
-                    isGameLoaded = true;
-                  });
-                },
-              ),
               if (!isGameLoaded)
                 Container(
                   color: const Color(0xFF080A0F),
