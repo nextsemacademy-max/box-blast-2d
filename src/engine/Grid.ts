@@ -1,4 +1,4 @@
-import { GridCellState, ShapeDefinition, ClearResult } from './types';
+import { GridCellState, ShapeDefinition, ClearResult, ObstacleType, ColorTheme } from './types';
 
 export const BOARD_SIZE = 8;
 
@@ -129,10 +129,16 @@ export class GridEngine {
       }
     }
 
-    // Empty the cells
+    const clearedObstacles: { r: number; c: number; type: ObstacleType }[] = [];
+
+    // Empty the cells and track any cleared obstacles
     clearedSet.forEach((coord) => {
       const [r, c] = coord.split(',').map(Number);
-      this.board[r][c] = { filled: false, color: null };
+      const cell = this.board[r][c];
+      if (cell.obstacle) {
+        clearedObstacles.push({ r, c, type: cell.obstacle });
+      }
+      this.board[r][c] = { filled: false, color: null, obstacle: null };
     });
 
     return {
@@ -140,7 +146,39 @@ export class GridEngine {
       clearedCols,
       totalLines: clearedRows.length + clearedCols.length,
       cellsCleared: clearedSet.size,
+      clearedObstacles,
     };
+  }
+
+  /**
+   * Sets an obstacle on the board (used by Adventure mode levels)
+   */
+  public setObstacle(r: number, c: number, obstacle: ObstacleType, color: ColorTheme): void {
+    if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+      this.board[r][c] = {
+        filled: true,
+        color,
+        obstacle,
+        obstacleHits: 1,
+      };
+    }
+  }
+
+  /**
+   * Counts remaining obstacles of a specific type on the board
+   */
+  public countRemainingObstacles(type?: ObstacleType): number {
+    let count = 0;
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (type) {
+          if (this.board[r][c].obstacle === type) count++;
+        } else {
+          if (this.board[r][c].obstacle) count++;
+        }
+      }
+    }
+    return count;
   }
 
   /**

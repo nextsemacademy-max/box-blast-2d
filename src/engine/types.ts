@@ -7,6 +7,8 @@ export type ColorTheme =
   | 'color-sapphire'
   | 'color-pink';
 
+export type ObstacleType = 'ice' | 'relic';
+
 export interface ShapeDefinition {
   id: string;
   name: string;
@@ -18,6 +20,8 @@ export interface ShapeDefinition {
 export interface GridCellState {
   filled: boolean;
   color: ColorTheme | null;
+  obstacle?: ObstacleType | null;
+  obstacleHits?: number;
 }
 
 export interface DragState {
@@ -37,4 +41,5 @@ export interface ClearResult {
   clearedCols: number[];
   totalLines: number;
   cellsCleared: number;
+  clearedObstacles?: { r: number; c: number; type: ObstacleType }[];
 }

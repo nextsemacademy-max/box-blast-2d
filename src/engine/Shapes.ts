@@ -187,7 +187,7 @@ export const SHAPES: ShapeDefinition[] = [
     weight: 5,
   },
 
-  // 10. T-Shape (3x2)
+  // 10. T-Shape (All 4 Rotations)
   {
     id: 't-shape-down',
     name: 'T-Shape Down',
@@ -208,11 +208,33 @@ export const SHAPES: ShapeDefinition[] = [
     color: 'color-purple',
     weight: 10,
   },
+  {
+    id: 't-shape-left',
+    name: 'T-Shape Left',
+    matrix: [
+      [0, 1],
+      [1, 1],
+      [0, 1],
+    ],
+    color: 'color-purple',
+    weight: 9,
+  },
+  {
+    id: 't-shape-right',
+    name: 'T-Shape Right',
+    matrix: [
+      [1, 0],
+      [1, 1],
+      [1, 0],
+    ],
+    color: 'color-purple',
+    weight: 9,
+  },
 
-  // 11. Z and S shapes
+  // 11. Z and S shapes (Horizontal & Vertical)
   {
     id: 'z-shape',
-    name: 'Z-Shape',
+    name: 'Z-Shape Horizontal',
     matrix: [
       [1, 1, 0],
       [0, 1, 1],
@@ -221,14 +243,82 @@ export const SHAPES: ShapeDefinition[] = [
     weight: 9,
   },
   {
+    id: 'z-shape-v',
+    name: 'Z-Shape Vertical',
+    matrix: [
+      [0, 1],
+      [1, 1],
+      [1, 0],
+    ],
+    color: 'color-cyan',
+    weight: 8,
+  },
+  {
     id: 's-shape',
-    name: 'S-Shape',
+    name: 'S-Shape Horizontal',
     matrix: [
       [0, 1, 1],
       [1, 1, 0],
     ],
     color: 'color-emerald',
     weight: 9,
+  },
+  {
+    id: 's-shape-v',
+    name: 'S-Shape Vertical',
+    matrix: [
+      [1, 0],
+      [1, 1],
+      [0, 1],
+    ],
+    color: 'color-emerald',
+    weight: 8,
+  },
+
+  // 12. Standard L and J Shapes (3x2 - 4 Rotations)
+  {
+    id: 'l-shape-1',
+    name: 'L-Shape BL',
+    matrix: [
+      [1, 0],
+      [1, 0],
+      [1, 1],
+    ],
+    color: 'color-amber',
+    weight: 10,
+  },
+  {
+    id: 'l-shape-2',
+    name: 'L-Shape BR',
+    matrix: [
+      [0, 1],
+      [0, 1],
+      [1, 1],
+    ],
+    color: 'color-amber',
+    weight: 10,
+  },
+  {
+    id: 'l-shape-3',
+    name: 'L-Shape TL',
+    matrix: [
+      [1, 1],
+      [1, 0],
+      [1, 0],
+    ],
+    color: 'color-amber',
+    weight: 10,
+  },
+  {
+    id: 'l-shape-4',
+    name: 'L-Shape TR',
+    matrix: [
+      [1, 1],
+      [0, 1],
+      [0, 1],
+    ],
+    color: 'color-amber',
+    weight: 10,
   },
 ];
 

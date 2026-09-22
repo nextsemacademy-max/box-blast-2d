@@ -57,6 +57,9 @@ export class ParticleEngine {
   private particles: Particle[] = [];
   private shockwaves: Shockwave[] = [];
   private confetti: ConfettiPiece[] = [];
+  private dpr: number = 1;
+  private logicalWidth: number = 380;
+  private logicalHeight: number = 380;
   private isRunning: boolean = false;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -68,9 +71,12 @@ export class ParticleEngine {
 
   public resize(): void {
     const rect = this.canvas.parentElement?.getBoundingClientRect();
-    if (rect) {
-      this.canvas.width = rect.width;
-      this.canvas.height = rect.height;
+    if (rect && rect.width > 0 && rect.height > 0) {
+      this.dpr = Math.min(window.devicePixelRatio || 1, 3);
+      this.logicalWidth = rect.width;
+      this.logicalHeight = rect.height;
+      this.canvas.width = Math.round(rect.width * this.dpr);
+      this.canvas.height = Math.round(rect.height * this.dpr);
     }
   }
 
@@ -143,8 +149,8 @@ export class ParticleEngine {
 
   // Dual cannons shooting from bottom corners across the board
   public spawnHypeCannons(count: number = 80): void {
-    const w = this.canvas.width || 380;
-    const h = this.canvas.height || 380;
+    const w = this.logicalWidth || 380;
+    const h = this.logicalHeight || 380;
 
     for (let i = 0; i < count; i++) {
       const fromLeft = i % 2 === 0;
@@ -188,11 +194,15 @@ export class ParticleEngine {
   private loop = (): void => {
     if (this.particles.length === 0 && this.shockwaves.length === 0 && this.confetti.length === 0) {
       this.isRunning = false;
+      this.ctx.setTransform(1, 0, 0, 1, 0, 0);
       this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
       return;
     }
 
+    this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+    this.ctx.save();
+    this.ctx.scale(this.dpr, this.dpr);
 
     // 1. Render & update Shockwaves
     for (let i = this.shockwaves.length - 1; i >= 0; i--) {
@@ -302,6 +312,7 @@ export class ParticleEngine {
       }
     }
 
+    this.ctx.restore();
     requestAnimationFrame(this.loop);
   };
 }

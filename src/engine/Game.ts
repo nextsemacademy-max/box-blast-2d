@@ -3,6 +3,15 @@ import { generateSmartHand } from './Shapes';
 import { DragState, ShapeDefinition } from './types';
 import { sound } from './SoundFX';
 import { ParticleEngine } from './Particles';
+import {
+  ADVENTURE_LEVELS,
+  AdventureLevel,
+  getUnlockedLevel,
+  unlockNextLevel,
+  getLevelStars,
+  saveLevelStars,
+  calculateStars,
+} from './AdventureLevels';
 
 export class BlockBlastGame {
   private grid: GridEngine;
@@ -39,7 +48,59 @@ export class BlockBlastGame {
   private modalRestartBtn: HTMLElement;
   private modalReviveBtn: HTMLElement;
   private closeTutorialBtn: HTMLElement;
+  private gameWrapperEl: HTMLElement;
+  private currentTheme: string = 'theme-cosmic';
   private hapticEnabled: boolean = true;
+  private hasRevivedThisRun: boolean = false;
+
+  // Career Statistics & Celebration DOM Elements
+  private statsModal: HTMLElement;
+  private pauseStatsBtn: HTMLElement;
+  private closeStatsBtn: HTMLElement;
+  private statHighScore: HTMLElement;
+  private statGamesPlayed: HTMLElement;
+  private statLinesCleared: HTMLElement;
+  private statMaxCombo: HTMLElement;
+  private gameOverNewRecordBanner: HTMLElement;
+  private modalShareBtn: HTMLElement;
+
+  // Adventure Mode DOM Elements & State
+  private btnModeClassic: HTMLElement;
+  private btnModeAdventure: HTMLElement;
+  private adventureHudBar: HTMLElement;
+  private adventureMapBtn: HTMLElement;
+  private adventureLevelBadge: HTMLElement;
+  private adventureGoalIcon: HTMLElement;
+  private adventureGoalName: HTMLElement;
+  private adventureGoalCount: HTMLElement;
+  private adventureMovesLeft: HTMLElement;
+  private adventureMovesChip: HTMLElement;
+  private adventureMapModal: HTMLElement;
+  private mapTotalStars: HTMLElement;
+  private adventureLevelsGrid: HTMLElement;
+  private closeMapBtn: HTMLElement;
+  private levelCompleteModal: HTMLElement;
+  private victoryLevelSubtitle: HTMLElement;
+  private victoryScore: HTMLElement;
+  private victoryMovesLeft: HTMLElement;
+  private nextLevelBtn: HTMLElement;
+  private replayLevelBtn: HTMLElement;
+  private victoryMapBtn: HTMLElement;
+  private levelFailedModal: HTMLElement;
+  private failStatusText: HTMLElement;
+  private failProgressStat: HTMLElement;
+  private failScoreStat: HTMLElement;
+  private retryLevelBtn: HTMLElement;
+  private failMapBtn: HTMLElement;
+
+  // Adventure Mode Gameplay State
+  private currentGameMode: 'classic' | 'adventure' = 'classic';
+  private currentAdventureLevelId: number = 1;
+  private adventureMovesRemaining: number = 14;
+  private adventureGoalCurrent: number = 0;
+  private adventureGoalTarget: number = 3;
+  private isAdventureWon: boolean = false;
+  private isAdventureFailed: boolean = false;
 
   // State
   private hand: (ShapeDefinition | null)[] = [null, null, null];
@@ -52,6 +113,15 @@ export class BlockBlastGame {
   private dragState: DragState | null = null;
   private activePointerId: number | null = null;
   private activeContainerEl: HTMLElement | null = null;
+
+  // Tap-to-Place State
+  private selectedSlotIndex: number | null = null;
+  private dragMoved: boolean = false;
+
+  // Career Statistics Tracking
+  private gamesPlayed: number = 0;
+  private totalLinesCleared: number = 0;
+  private maxCombo: number = 0;
 
   // Cached Geometry & Direct Cell Array for 120fps Zero-Lag Dragging
   private cachedBoardRect: DOMRect | null = null;
@@ -67,6 +137,7 @@ export class BlockBlastGame {
   private rafDragPending: boolean = false;
   private latestPointerX: number = 0;
   private latestPointerY: number = 0;
+  private sparkleTimer: ReturnType<typeof setInterval> | null = null;
 
   // Combo Celebration Titles
   private comboHypeTitles = [
@@ -84,6 +155,7 @@ export class BlockBlastGame {
     this.grid = new GridEngine();
 
     // Cache DOM Elements
+    this.gameWrapperEl = document.getElementById('app')!;
     this.boardContainerElement = document.querySelector('.board-container')!;
     this.boardElement = document.getElementById('grid-board')!;
     this.handDockElement = document.getElementById('hand-dock')!;
@@ -106,6 +178,7 @@ export class BlockBlastGame {
     this.pauseBtn = document.getElementById('pause-btn')!;
     this.pauseModal = document.getElementById('pause-modal')!;
     this.resumeGameBtn = document.getElementById('resume-game-btn')!;
+    this.pauseStatsBtn = document.getElementById('pause-stats-btn')!;
     this.pauseHowToPlayBtn = document.getElementById('pause-how-to-play-btn')!;
     this.pauseRestartGameBtn = document.getElementById('pause-restart-game-btn')!;
     this.modalToggleSound = document.getElementById('modal-toggle-sound')!;
@@ -117,14 +190,57 @@ export class BlockBlastGame {
     this.modalReviveBtn = document.getElementById('modal-revive-btn')!;
     this.closeTutorialBtn = document.getElementById('close-tutorial-btn')!;
 
+    // Career Stats & Celebration Elements
+    this.statsModal = document.getElementById('stats-modal')!;
+    this.closeStatsBtn = document.getElementById('close-stats-btn')!;
+    this.statHighScore = document.getElementById('stat-high-score')!;
+    this.statGamesPlayed = document.getElementById('stat-games-played')!;
+    this.statLinesCleared = document.getElementById('stat-lines-cleared')!;
+    this.statMaxCombo = document.getElementById('stat-max-combo')!;
+    this.gameOverNewRecordBanner = document.getElementById('game-over-new-record')!;
+    this.modalShareBtn = document.getElementById('modal-share-btn')!;
+
+    // Adventure Mode DOM Elements
+    this.btnModeClassic = document.getElementById('btn-mode-classic')!;
+    this.btnModeAdventure = document.getElementById('btn-mode-adventure')!;
+    this.adventureHudBar = document.getElementById('adventure-hud-bar')!;
+    this.adventureMapBtn = document.getElementById('adventure-map-btn')!;
+    this.adventureLevelBadge = document.getElementById('adventure-level-badge')!;
+    this.adventureGoalIcon = document.getElementById('adventure-goal-icon')!;
+    this.adventureGoalName = document.getElementById('adventure-goal-name')!;
+    this.adventureGoalCount = document.getElementById('adventure-goal-count')!;
+    this.adventureMovesLeft = document.getElementById('adventure-moves-left')!;
+    this.adventureMovesChip = document.querySelector('.adventure-moves-chip')!;
+    this.adventureMapModal = document.getElementById('adventure-map-modal')!;
+    this.mapTotalStars = document.getElementById('map-total-stars')!;
+    this.adventureLevelsGrid = document.getElementById('adventure-levels-grid')!;
+    this.closeMapBtn = document.getElementById('close-map-btn')!;
+    this.levelCompleteModal = document.getElementById('level-complete-modal')!;
+    this.victoryLevelSubtitle = document.getElementById('victory-level-subtitle')!;
+    this.victoryScore = document.getElementById('victory-score')!;
+    this.victoryMovesLeft = document.getElementById('victory-moves-left')!;
+    this.nextLevelBtn = document.getElementById('next-level-btn')!;
+    this.replayLevelBtn = document.getElementById('replay-level-btn')!;
+    this.victoryMapBtn = document.getElementById('victory-map-btn')!;
+    this.levelFailedModal = document.getElementById('level-failed-modal')!;
+    this.failStatusText = document.getElementById('fail-status-text')!;
+    this.failProgressStat = document.getElementById('fail-progress-stat')!;
+    this.failScoreStat = document.getElementById('fail-score-stat')!;
+    this.retryLevelBtn = document.getElementById('retry-level-btn')!;
+    this.failMapBtn = document.getElementById('fail-map-btn')!;
+
     const canvas = document.getElementById('particle-canvas') as HTMLCanvasElement;
     this.particles = new ParticleEngine(canvas);
 
-    this.initScores();
+    this.initStorage();
+    this.setupAudioUnlock();
     this.setupBoardDOM();
     this.setupGlobalPointerEvents();
     this.setupButtonEvents();
+    this.setupAdventureEvents();
+    this.setupKeyboardEvents();
     this.startNewGame();
+    this.startIdleSparkleTimer();
 
     // Re-cache board rect on window resize
     window.addEventListener('resize', () => {
@@ -134,25 +250,78 @@ export class BlockBlastGame {
     });
   }
 
-  private initScores(): void {
+  private initStorage(): void {
     const savedBest = localStorage.getItem('box_blast_2d_best');
     this.bestScore = savedBest ? parseInt(savedBest, 10) : 0;
-    this.bestScoreElement.textContent = String(this.bestScore);
+    this.bestScoreElement.textContent = this.bestScore.toLocaleString();
+
+    this.gamesPlayed = parseInt(localStorage.getItem('box_blast_games_played') || '0', 10);
+    this.totalLinesCleared = parseInt(localStorage.getItem('box_blast_total_lines') || '0', 10);
+    this.maxCombo = parseInt(localStorage.getItem('box_blast_max_combo') || '0', 10);
+
+    const savedSound = localStorage.getItem('box_blast_sound');
+    if (savedSound !== null) {
+      sound.enabled = savedSound === 'true';
+    }
+
+    const savedHaptic = localStorage.getItem('box_blast_haptics');
+    if (savedHaptic !== null) {
+      this.hapticEnabled = savedHaptic === 'true';
+    }
+
+    this.updateSoundUI();
+    this.updateHapticUI();
+
+    const savedTheme = localStorage.getItem('box_blast_theme') || 'theme-cosmic';
+    this.applyTheme(savedTheme);
+  }
+
+  public applyTheme(theme: string): void {
+    this.currentTheme = theme;
+    localStorage.setItem('box_blast_theme', theme);
+    this.gameWrapperEl.classList.remove('theme-cosmic', 'theme-wood', 'theme-neon', 'theme-dark');
+    this.gameWrapperEl.classList.add(theme);
+
+    const buttons = document.querySelectorAll('.theme-select-btn');
+    buttons.forEach((btn) => {
+      if ((btn as HTMLElement).dataset.theme === theme) {
+        btn.classList.add('active');
+      } else {
+        btn.classList.remove('active');
+      }
+    });
+  }
+
+  private setupAudioUnlock(): void {
+    const unlockHandler = () => {
+      sound.unlock();
+      window.removeEventListener('pointerdown', unlockHandler);
+      window.removeEventListener('keydown', unlockHandler);
+    };
+    window.addEventListener('pointerdown', unlockHandler, { once: true });
+    window.addEventListener('keydown', unlockHandler, { once: true });
   }
 
   public startNewGame(): void {
+    this.deselectSlot();
     this.grid.reset();
     this.score = 0;
     this.displayedScore = 0;
     this.comboStreak = 0;
     this.isGameOver = false;
+    this.hasRevivedThisRun = false;
     this.isReturningSnapback = false;
     this.wasPredicting = false;
     this.hasCelebratedNewRecord = false;
+
+    this.gamesPlayed++;
+    localStorage.setItem('box_blast_games_played', String(this.gamesPlayed));
+
     this.clearGhostCells();
     this.clearPredictiveCells();
     this.scoreElement.textContent = '0';
     this.updateStreakUI();
+    this.updateReviveButtonUI();
     this.renderBoard();
     this.spawnNewHand(true);
     this.gameOverModal.classList.add('hidden');
@@ -176,6 +345,11 @@ export class BlockBlastGame {
         cell.className = 'grid-cell';
         cell.dataset.row = String(r);
         cell.dataset.col = String(c);
+
+        // Tap-to-place support
+        cell.addEventListener('click', () => this.onCellClicked(r, c));
+        cell.addEventListener('pointerenter', () => this.onCellHover(r, c));
+
         this.boardElement.appendChild(cell);
         row.push(cell);
       }
@@ -189,10 +363,16 @@ export class BlockBlastGame {
       for (let c = 0; c < BOARD_SIZE; c++) {
         const cell = this.cellElementsGrid[r][c];
         const state = this.grid.board[r][c];
-        cell.className = 'grid-cell';
+        let cls = 'grid-cell';
         if (state.filled && state.color) {
-          cell.classList.add('filled', state.color);
+          cls += ` filled ${state.color}`;
         }
+        if (state.obstacle === 'ice') {
+          cls += ' obstacle-ice';
+        } else if (state.obstacle === 'relic') {
+          cls += ' obstacle-relic';
+        }
+        cell.className = cls;
       }
     }
   }
@@ -239,11 +419,13 @@ export class BlockBlastGame {
         }
       }
 
-      // Pointer drag start on the shape
+      // Pointer drag/tap start on the shape
       container.addEventListener('pointerdown', (e) => this.onDragStart(e, shape, i, container));
 
       slot.appendChild(container);
     }
+
+    this.updateHandPlayabilityVisuals();
   }
 
   private cancelSnapbackImmediate(): void {
@@ -266,12 +448,21 @@ export class BlockBlastGame {
     }
     e.preventDefault();
 
+    this.dragMoved = false;
+
+    // If a different slot was selected in tap-to-place mode, deselect it
+    if (this.selectedSlotIndex !== null && this.selectedSlotIndex !== slotIndex) {
+      this.deselectSlot();
+    }
+
     this.updateCachedBoardGeometry();
     sound.playPickup();
     this.triggerVibrate(10);
 
     const isTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
-    const touchOffsetY = isTouch ? 72 : 0;
+    const cellH = this.cachedCellHeight || 42;
+    // Ergonomic thumb offset: ~44-48px (just above thumb tip) for instant 1:1 single-hand control
+    const touchOffsetY = isTouch ? Math.min(50, Math.max(38, Math.round(cellH * 1.12))) : 0;
 
     let grabOffsetX = 0;
     let grabOffsetY = 0;
@@ -286,6 +477,9 @@ export class BlockBlastGame {
 
     this.activePointerId = e.pointerId;
     this.activeContainerEl = containerEl;
+    try {
+      containerEl.setPointerCapture(e.pointerId);
+    } catch {}
 
     this.dragState = {
       shape,
@@ -356,6 +550,11 @@ export class BlockBlastGame {
       if (!this.dragState) return;
       e.preventDefault();
 
+      const dist = Math.hypot(e.clientX - this.dragState.initialPointerX, e.clientY - this.dragState.initialPointerY);
+      if (dist > 7) {
+        this.dragMoved = true;
+      }
+
       const grabX = this.dragState.grabOffsetX || 0;
       const grabY = this.dragState.grabOffsetY || 0;
       this.latestPointerX = e.clientX - grabX;
@@ -371,6 +570,18 @@ export class BlockBlastGame {
     window.addEventListener('pointerup', (e) => {
       if (!this.dragState) return;
       e.preventDefault();
+
+      // If released with minimal movement, treat as a TAP/CLICK on the slot
+      if (!this.dragMoved) {
+        const slotIdx = this.dragState.slotIndex;
+        const slot = document.getElementById(`slot-${slotIdx}`);
+        if (slot && slot.firstElementChild) {
+          (slot.firstElementChild as HTMLElement).style.visibility = 'visible';
+        }
+        this.cleanupDrag();
+        this.toggleSelectSlot(slotIdx);
+        return;
+      }
 
       const grabX = this.dragState.grabOffsetX || 0;
       const grabY = this.dragState.grabOffsetY || 0;
@@ -416,6 +627,7 @@ export class BlockBlastGame {
 
     if (this.grid.canPlaceShape(this.dragState.shape, startRow, startCol)) {
       const matrix = this.dragState.shape.matrix;
+      const shapeColor = this.dragState.shape.color;
       for (let r = 0; r < matrix.length; r++) {
         for (let c = 0; c < matrix[0].length; c++) {
           if (matrix[r][c] === 1) {
@@ -424,7 +636,7 @@ export class BlockBlastGame {
             this.currentGhostCells.push({ r: gr, c: gc });
             const cellEl = this.getCellElement(gr, gc);
             if (cellEl) {
-              cellEl.classList.add('ghost');
+              cellEl.classList.add('ghost', shapeColor);
             }
           }
         }
@@ -480,6 +692,25 @@ export class BlockBlastGame {
       const cellEl = this.getCellElement(r, c);
       if (cellEl) {
         cellEl.classList.remove('ghost');
+        const state = this.grid.board[r]?.[c];
+        if (state && state.filled && state.color) {
+          let cls = `grid-cell filled ${state.color}`;
+          if (state.obstacle === 'ice') cls += ' obstacle-ice';
+          else if (state.obstacle === 'relic') cls += ' obstacle-relic';
+          cellEl.className = cls;
+        } else {
+          cellEl.classList.remove(
+            'color-cyan',
+            'color-amber',
+            'color-ruby',
+            'color-emerald',
+            'color-purple',
+            'color-sapphire',
+            'color-pink',
+            'obstacle-ice',
+            'obstacle-relic'
+          );
+        }
       }
     });
     this.currentGhostCells = [];
@@ -491,6 +722,13 @@ export class BlockBlastGame {
       const cellEl = this.getCellElement(r, c);
       if (cellEl) {
         cellEl.classList.remove('predictive-line', 'predictive-line-multi');
+        const state = this.grid.board[r]?.[c];
+        if (state && state.filled && state.color) {
+          let cls = `grid-cell filled ${state.color}`;
+          if (state.obstacle === 'ice') cls += ' obstacle-ice';
+          else if (state.obstacle === 'relic') cls += ' obstacle-relic';
+          cellEl.className = cls;
+        }
       }
     });
     this.currentPredictiveCells = [];
@@ -500,15 +738,15 @@ export class BlockBlastGame {
     const boardRect = this.cachedBoardRect;
     if (!boardRect) return null;
 
-    const cellWidth = this.cachedCellWidth;
-    const cellHeight = this.cachedCellHeight;
+    const cellWidth = this.cachedCellWidth || 42;
+    const cellHeight = this.cachedCellHeight || 42;
 
     const shapeCols = shape.matrix[0].length;
     const shapeRows = shape.matrix.length;
 
-    // Forgiving margin around board edges so ghost doesn't abruptly drop near borders
-    const marginX = cellWidth * 0.55;
-    const marginY = cellHeight * 0.55;
+    // Generous forgiving margin around board edges for smooth single-thumb reach
+    const marginX = cellWidth * 1.2;
+    const marginY = cellHeight * 1.2;
 
     if (
       x < boardRect.left - marginX ||
@@ -519,19 +757,40 @@ export class BlockBlastGame {
       return null;
     }
 
-    const relX = x - boardRect.left - (shapeCols * cellWidth) / 2 + cellWidth / 2;
-    const relY = y - boardRect.top - (shapeRows * cellHeight) / 2 + cellHeight / 2;
+    const fracCol = (x - boardRect.left) / cellWidth - shapeCols / 2;
+    const fracRow = (y - boardRect.top) / cellHeight - shapeRows / 2;
+    const rawCol = Math.round(fracCol);
+    const rawRow = Math.round(fracRow);
 
-    const startCol = Math.round(relX / cellWidth);
-    const startRow = Math.round(relY / cellHeight);
+    const maxCol = BOARD_SIZE - shapeCols;
+    const maxRow = BOARD_SIZE - shapeRows;
 
-    if (
-      startRow < 0 ||
-      startRow > BOARD_SIZE - shapeRows ||
-      startCol < 0 ||
-      startCol > BOARD_SIZE - shapeCols
-    ) {
-      return null;
+    // Magnetic Edge Clamping: Piece snaps cleanly to boundaries instead of ghost disappearing!
+    let startCol = Math.max(0, Math.min(maxCol, rawCol));
+    let startRow = Math.max(0, Math.min(maxRow, rawRow));
+
+    // Smart Magnetic Assist: If target cell is blocked, gently check 1-cell adjacent spot in direction of thumb bias
+    if (!this.grid.canPlaceShape(shape, startRow, startCol)) {
+      const biasX = fracCol - rawCol;
+      const biasY = fracRow - rawRow;
+
+      const candidates: Array<{ r: number; c: number }> = [];
+      if (Math.abs(biasX) > 0.2) {
+        candidates.push({ r: startRow, c: startCol + (biasX > 0 ? 1 : -1) });
+      }
+      if (Math.abs(biasY) > 0.2) {
+        candidates.push({ r: startRow + (biasY > 0 ? 1 : -1), c: startCol });
+      }
+
+      for (const cand of candidates) {
+        if (
+          cand.r >= 0 && cand.r <= maxRow &&
+          cand.c >= 0 && cand.c <= maxCol &&
+          this.grid.canPlaceShape(shape, cand.r, cand.c)
+        ) {
+          return { startRow: cand.r, startCol: cand.c };
+        }
+      }
     }
 
     return { startRow, startCol };
@@ -557,7 +816,8 @@ export class BlockBlastGame {
 
         // Add placement points (10 pts per block unit)
         const blockUnitsCount = this.dragState.shape.matrix.flat().filter(v => v === 1).length;
-        this.addScore(blockUnitsCount * 10);
+        const placementPoints = blockUnitsCount * 10;
+        this.addScore(placementPoints);
 
         // Consume block from hand
         this.hand[this.dragState.slotIndex] = null;
@@ -565,14 +825,34 @@ export class BlockBlastGame {
 
         this.renderBoard();
 
-        // Magnetic Snap-In Pop Animation on newly placed cells
+        // Magnetic Snap-In Jelly Pop Animation on newly placed cells
         placedCoords.forEach(({ r, c }) => {
           const el = this.getCellElement(r, c);
           if (el) {
             el.classList.add('placed-pop');
-            setTimeout(() => el.classList.remove('placed-pop'), 250);
+            setTimeout(() => el.classList.remove('placed-pop'), 320);
           }
         });
+
+        // Floating flying score for piece drop
+        if (placedCoords.length > 0) {
+          const boardRect = this.boardElement.getBoundingClientRect();
+          const containerRect = this.boardContainerElement.getBoundingClientRect();
+          const avgR = placedCoords.reduce((acc, p) => acc + p.r, 0) / placedCoords.length;
+          const avgC = placedCoords.reduce((acc, p) => acc + p.c, 0) / placedCoords.length;
+          const fx = (boardRect.left - containerRect.left) + (avgC + 0.5) * (this.cachedCellWidth || 38);
+          const fy = (boardRect.top - containerRect.top) + (avgR + 0.5) * (this.cachedCellHeight || 38);
+          this.spawnFloatingScore(fx, fy, `+${placementPoints}`, false);
+        }
+
+        if (this.currentGameMode === 'adventure') {
+          this.adventureMovesRemaining = Math.max(0, this.adventureMovesRemaining - 1);
+          const level = ADVENTURE_LEVELS.find((l) => l.id === this.currentAdventureLevelId);
+          if (level && level.objectiveType === 'target_score') {
+            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.score);
+          }
+          this.updateAdventureHUD();
+        }
 
         this.processLineClears();
       }
@@ -580,6 +860,8 @@ export class BlockBlastGame {
 
     if (placed) {
       this.cleanupDrag();
+      this.deselectSlot();
+      this.renderBoard();
       if (this.hand.every((s) => s === null)) {
         this.spawnNewHand(true);
       } else {
@@ -658,6 +940,15 @@ export class BlockBlastGame {
       this.comboStreak++;
       sound.playLineClear(this.comboStreak);
 
+      // Track Career Stats
+      this.totalLinesCleared += result.totalLines;
+      localStorage.setItem('box_blast_total_lines', String(this.totalLinesCleared));
+
+      if (this.comboStreak > this.maxCombo) {
+        this.maxCombo = this.comboStreak;
+        localStorage.setItem('box_blast_max_combo', String(this.maxCombo));
+      }
+
       // Mega Combo Celebration Confetti Cannons
       if (result.totalLines >= 2 || this.comboStreak >= 3) {
         this.particles.spawnHypeCannons(85);
@@ -673,7 +964,6 @@ export class BlockBlastGame {
       }
 
       // High-Rewarding Points Calculation:
-      // 1 Line: 150 pts | 2 Lines: 450 pts | 3 Lines: 900 pts | 4+ Lines: 1600+ pts
       let baseLinePoints = 150;
       if (result.totalLines === 2) {
         baseLinePoints = 450;
@@ -683,7 +973,6 @@ export class BlockBlastGame {
         baseLinePoints = 1600 + (result.totalLines - 4) * 500;
       }
 
-      // Streak Multiplier: x1 for streak 1, x2 for streak 2, x3 for streak 3, x4 for streak 4, etc.
       const comboMultiplier = Math.max(1, this.comboStreak);
       let totalEarned = Math.round(baseLinePoints * comboMultiplier);
 
@@ -698,9 +987,33 @@ export class BlockBlastGame {
 
       this.addScore(totalEarned);
 
+      // Track Adventure Mode Objective Progress
+      if (this.currentGameMode === 'adventure') {
+        const level = ADVENTURE_LEVELS.find((l) => l.id === this.currentAdventureLevelId);
+        if (level) {
+          if (level.objectiveType === 'clear_lines') {
+            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + result.totalLines);
+          } else if (level.objectiveType === 'target_score') {
+            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.score);
+          } else if (level.objectiveType === 'melt_ice' && result.clearedObstacles) {
+            const iceMelted = result.clearedObstacles.filter((o) => o.type === 'ice').length;
+            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + iceMelted);
+          } else if (level.objectiveType === 'collect_relics' && result.clearedObstacles) {
+            const relicsCollected = result.clearedObstacles.filter((o) => o.type === 'relic').length;
+            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + relicsCollected);
+          }
+          this.updateAdventureHUD(level);
+
+          if (this.adventureGoalCurrent >= this.adventureGoalTarget && !this.isAdventureWon) {
+            this.triggerAdventureVictory(level);
+          }
+        }
+      }
+
       // Trigger Staggered Line Clears & Jewel Debris
       this.triggerStaggeredLineClears(result.clearedRows, result.clearedCols, totalEarned, isCleanSlate);
       this.updateStreakUI();
+      this.updateHandPlayabilityVisuals();
     } else {
       this.comboStreak = 0;
       this.updateStreakUI();
@@ -715,45 +1028,53 @@ export class BlockBlastGame {
     this.boardContainerElement.classList.add(shakeClass);
     setTimeout(() => this.boardContainerElement.classList.remove(shakeClass), 240);
 
-    // Staggered cell clear wave (Row Left-to-Right)
+    // Real-Time Laser Sweep Elimination Effect
+    this.spawnLaserBeams(clearedRows, clearedCols, clearedRows.length + clearedCols.length >= 2);
+
+    const clearedRowSet = new Set(clearedRows);
+    const clearedColSet = new Set(clearedCols);
+    const allClearedKeys = new Set<string>();
+
     clearedRows.forEach((r) => {
-      for (let c = 0; c < BOARD_SIZE; c++) {
-        const cellEl = this.getCellElement(r, c);
-        if (cellEl) {
-          const cellRect = cellEl.getBoundingClientRect();
-          const x = cellRect.left - containerRect.left + cellRect.width / 2;
-          const y = cellRect.top - containerRect.top + cellRect.height / 2;
-
-          // Immediately empty the board socket DOM so user can place next piece instantly!
-          cellEl.className = 'grid-cell';
-
-          setTimeout(() => {
-            this.particles.spawnBurst(x, y, '#22d3ee', 14);
-          }, c * 16);
-        }
-      }
+      for (let c = 0; c < BOARD_SIZE; c++) allClearedKeys.add(`${r},${c}`);
+    });
+    clearedCols.forEach((c) => {
+      for (let r = 0; r < BOARD_SIZE; r++) allClearedKeys.add(`${r},${c}`);
     });
 
-    // Staggered cell clear wave (Column Top-to-Bottom)
-    clearedCols.forEach((c) => {
-      for (let r = 0; r < BOARD_SIZE; r++) {
-        const cellEl = this.getCellElement(r, c);
-        if (cellEl) {
-          const cellRect = cellEl.getBoundingClientRect();
-          const x = cellRect.left - containerRect.left + cellRect.width / 2;
-          const y = cellRect.top - containerRect.top + cellRect.height / 2;
+    allClearedKeys.forEach((key) => {
+      const [r, c] = key.split(',').map(Number);
+      const cellEl = this.getCellElement(r, c);
+      if (!cellEl) return;
 
+      const inRow = clearedRowSet.has(r);
+      const inCol = clearedColSet.has(c);
+      // Stagger wave: row clears wave left-to-right, col clears wave top-to-bottom
+      const delay = Math.min(inRow ? c * 20 : 999, inCol ? r * 20 : 999);
+      const particleColor = inRow && inCol ? '#f59e0b' : inRow ? '#22d3ee' : '#10b981';
+
+      setTimeout(() => {
+        const cellRect = cellEl.getBoundingClientRect();
+        const x = cellRect.left - containerRect.left + cellRect.width / 2;
+        const y = cellRect.top - containerRect.top + cellRect.height / 2;
+
+        cellEl.classList.add('clearing');
+        this.particles.spawnBurst(x, y, particleColor, 14);
+
+        setTimeout(() => {
           cellEl.className = 'grid-cell';
-
-          setTimeout(() => {
-            this.particles.spawnBurst(x, y, '#f59e0b', 14);
-          }, r * 16);
-        }
-      }
+        }, 280);
+      }, delay);
     });
 
     // 3D Combo Celebration Popup
     this.triggerComboCelebration(pointsEarned, isCleanSlate);
+
+    // Floating Flying Score Numbers
+    const boardRect = this.boardElement.getBoundingClientRect();
+    const fx = (boardRect.left - containerRect.left) + boardRect.width / 2;
+    const fy = (boardRect.top - containerRect.top) + boardRect.height / 2;
+    this.spawnFloatingScore(fx, fy, `+${pointsEarned.toLocaleString()}`, true);
   }
 
   private triggerComboCelebration(pointsEarned: number, isCleanSlate: boolean = false): void {
@@ -775,6 +1096,85 @@ export class BlockBlastGame {
     setTimeout(() => celebration.remove(), 900);
   }
 
+  // Real-Time Laser Beam Elimination Sweep
+  private spawnLaserBeams(clearedRows: number[], clearedCols: number[], isMulti: boolean): void {
+    const containerRect = this.boardContainerElement.getBoundingClientRect();
+
+    clearedRows.forEach((r) => {
+      const cell = this.getCellElement(r, 0);
+      if (!cell) return;
+      const rect = cell.getBoundingClientRect();
+      const top = rect.top - containerRect.top + rect.height / 2;
+
+      const beam = document.createElement('div');
+      beam.className = isMulti ? 'laser-beam laser-beam-row laser-gold' : 'laser-beam laser-beam-row';
+      beam.style.top = `${top}px`;
+      this.boardContainerElement.appendChild(beam);
+      setTimeout(() => beam.remove(), 360);
+    });
+
+    clearedCols.forEach((c) => {
+      const cell = this.getCellElement(0, c);
+      if (!cell) return;
+      const rect = cell.getBoundingClientRect();
+      const left = rect.left - containerRect.left + rect.width / 2;
+
+      const beam = document.createElement('div');
+      beam.className = isMulti ? 'laser-beam laser-beam-col laser-gold' : 'laser-beam laser-beam-col';
+      beam.style.left = `${left}px`;
+      this.boardContainerElement.appendChild(beam);
+      setTimeout(() => beam.remove(), 360);
+    });
+  }
+
+  // Floating Flying Score Numbers (+30, +450 PTS)
+  private spawnFloatingScore(x: number, y: number, text: string, isBig: boolean = false): void {
+    const scoreEl = document.createElement('div');
+    scoreEl.className = isBig ? 'flying-score big' : 'flying-score';
+    scoreEl.textContent = text;
+    scoreEl.style.left = `${x}px`;
+    scoreEl.style.top = `${y}px`;
+    this.boardContainerElement.appendChild(scoreEl);
+    setTimeout(() => scoreEl.remove(), 850);
+  }
+
+  // Idle Diamond Shimmer Engine (Gems on board sparkle every 4 seconds)
+  private startIdleSparkleTimer(): void {
+    if (this.sparkleTimer) clearInterval(this.sparkleTimer);
+    this.sparkleTimer = setInterval(() => this.triggerIdleShimmer(), 4000);
+  }
+
+  private triggerIdleShimmer(): void {
+    if (this.isGameOver || this.dragState !== null || this.isReturningSnapback) return;
+
+    const occupied: { r: number; c: number }[] = [];
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      for (let c = 0; c < BOARD_SIZE; c++) {
+        if (this.grid.board[r]?.[c]?.filled) {
+          occupied.push({ r, c });
+        }
+      }
+    }
+
+    if (occupied.length === 0) return;
+
+    // Pick 1 to 3 random occupied cells to shimmer
+    const count = Math.min(occupied.length, Math.floor(Math.random() * 3) + 1);
+    for (let i = 0; i < count; i++) {
+      const j = i + Math.floor(Math.random() * (occupied.length - i));
+      const temp = occupied[i];
+      occupied[i] = occupied[j];
+      occupied[j] = temp;
+
+      const { r, c } = occupied[i];
+      const cellEl = this.getCellElement(r, c);
+      if (cellEl && cellEl.classList.contains('filled') && !cellEl.classList.contains('clearing')) {
+        cellEl.classList.add('idle-shimmer');
+        setTimeout(() => cellEl.classList.remove('idle-shimmer'), 750);
+      }
+    }
+  }
+
   // 8. Rolling Score Counter & Streak UI
   private addScore(amount: number): void {
     this.score += amount;
@@ -783,7 +1183,7 @@ export class BlockBlastGame {
     if (this.score > this.bestScore) {
       const wasExistingRecord = this.bestScore > 0;
       this.bestScore = this.score;
-      this.bestScoreElement.textContent = String(this.bestScore);
+      this.bestScoreElement.textContent = this.bestScore.toLocaleString();
       localStorage.setItem('box_blast_2d_best', String(this.bestScore));
 
       // Celebrate first time breaking high score in this session
@@ -808,11 +1208,11 @@ export class BlockBlastGame {
     const interval = setInterval(() => {
       if (this.displayedScore < target) {
         this.displayedScore = Math.min(this.displayedScore + step, target);
-        this.scoreElement.textContent = String(this.displayedScore);
+        this.scoreElement.textContent = this.displayedScore.toLocaleString();
         sound.playScoreTick();
       } else {
         clearInterval(interval);
-        this.scoreElement.textContent = String(target);
+        this.scoreElement.textContent = target.toLocaleString();
       }
     }, 18);
   }
@@ -841,14 +1241,48 @@ export class BlockBlastGame {
 
   // 9. Playability Check & Game Over Flow
   private checkPlayability(): void {
-    const availableShapes = this.hand.filter((s): s is ShapeDefinition => s !== null);
+    this.updateHandPlayabilityVisuals();
 
+    const availableShapes = this.hand.filter((s): s is ShapeDefinition => s !== null);
     if (availableShapes.length === 0) return;
 
     const canPlayAny = availableShapes.some((shape) => this.grid.canFitAnywhere(shape));
-
     if (!canPlayAny) {
-      this.triggerGameOver();
+      if (this.currentGameMode === 'adventure') {
+        if (!this.isAdventureWon && !this.isAdventureFailed) {
+          this.triggerAdventureFail();
+        }
+      } else {
+        this.triggerGameOver();
+      }
+    } else if (this.currentGameMode === 'adventure') {
+      if (this.adventureMovesRemaining <= 0 && !this.isAdventureWon && !this.isAdventureFailed) {
+        if (this.adventureGoalCurrent < this.adventureGoalTarget) {
+          this.triggerAdventureFail();
+        }
+      }
+    }
+  }
+
+  // Visual cues for playable vs unplayable shapes in the hand dock
+  private updateHandPlayabilityVisuals(): void {
+    for (let i = 0; i < 3; i++) {
+      const slot = document.getElementById(`slot-${i}`);
+      const shape = this.hand[i];
+      if (!slot) continue;
+
+      if (shape) {
+        if (!this.grid.canFitAnywhere(shape)) {
+          slot.classList.add('slot-unplayable');
+          if (this.selectedSlotIndex === i) {
+            this.deselectSlot();
+          }
+        } else {
+          slot.classList.remove('slot-unplayable');
+        }
+      } else {
+        slot.classList.remove('slot-unplayable', 'slot-selected');
+      }
     }
   }
 
@@ -860,13 +1294,50 @@ export class BlockBlastGame {
       navigator.vibrate?.([60, 40, 80]);
     }
 
-    this.modalFinalScore.textContent = String(this.score);
-    this.modalBestScore.textContent = String(this.bestScore);
+    this.modalFinalScore.textContent = this.score.toLocaleString();
+    this.modalBestScore.textContent = this.bestScore.toLocaleString();
+    this.updateReviveButtonUI();
+
+    // Check if player set a new high score this run
+    const isNewRecord = this.score >= this.bestScore && this.score > 0;
+    if (isNewRecord) {
+      this.gameOverNewRecordBanner.classList.remove('hidden');
+      this.particles.spawnHypeCannons(80);
+      sound.playMegaComboFanfare();
+    } else {
+      this.gameOverNewRecordBanner.classList.add('hidden');
+    }
+
     this.gameOverModal.classList.remove('hidden');
+  }
+
+  private updateReviveButtonUI(): void {
+    if (!this.modalReviveBtn) return;
+    const strongEl = this.modalReviveBtn.querySelector('.revive-text strong');
+    const smallEl = this.modalReviveBtn.querySelector('.revive-text small');
+
+    if (this.hasRevivedThisRun) {
+      this.modalReviveBtn.setAttribute('disabled', 'true');
+      this.modalReviveBtn.classList.add('revive-used');
+      if (strongEl) strongEl.textContent = 'Revive Used (0/1)';
+      if (smallEl) smallEl.textContent = 'Limit 1 revive per game session';
+    } else {
+      this.modalReviveBtn.removeAttribute('disabled');
+      this.modalReviveBtn.classList.remove('revive-used');
+      if (strongEl) strongEl.textContent = 'Revive & Clear Board (1/1)';
+      if (smallEl) smallEl.textContent = 'Blast center 3×3 orbs to continue';
+    }
   }
 
   // Rewarded Ad Revive Simulation
   private performRevive(): void {
+    if (this.hasRevivedThisRun) {
+      this.showToast('Revive already used this game!');
+      return;
+    }
+    this.hasRevivedThisRun = true;
+    this.updateReviveButtonUI();
+
     this.gameOverModal.classList.add('hidden');
     this.isGameOver = false;
 
@@ -930,11 +1401,217 @@ export class BlockBlastGame {
     }
   }
 
-  // 10. Buttons & Interactive Modals Setup
+  private updateHapticUI(): void {
+    if (this.modalToggleHaptic) {
+      this.modalToggleHaptic.classList.toggle('active', this.hapticEnabled);
+    }
+  }
+
+  // 10. Tap-to-Place Accessibility Engine
+  private toggleSelectSlot(slotIndex: number): void {
+    if (this.selectedSlotIndex === slotIndex) {
+      this.deselectSlot();
+    } else {
+      this.selectSlot(slotIndex);
+    }
+  }
+
+  private selectSlot(slotIndex: number): void {
+    const shape = this.hand[slotIndex];
+    if (!shape) return;
+
+    if (!this.grid.canFitAnywhere(shape)) {
+      sound.playSnapback();
+      this.triggerVibrate(25);
+      this.showToast("Shape doesn't fit on board!");
+      return;
+    }
+
+    this.deselectSlot();
+    this.selectedSlotIndex = slotIndex;
+    sound.playPickup();
+    this.triggerVibrate(12);
+
+    const slotEl = document.getElementById(`slot-${slotIndex}`);
+    if (slotEl) {
+      slotEl.classList.add('slot-selected');
+    }
+    this.showToast(`Selected piece! Tap board socket to drop.`);
+  }
+
+  private deselectSlot(): void {
+    if (this.selectedSlotIndex !== null) {
+      const slotEl = document.getElementById(`slot-${this.selectedSlotIndex}`);
+      if (slotEl) {
+        slotEl.classList.remove('slot-selected');
+      }
+      this.selectedSlotIndex = null;
+    }
+    this.clearGhostCells();
+    this.clearPredictiveCells();
+  }
+
+  private onCellHover(r: number, c: number): void {
+    if (this.selectedSlotIndex === null || this.dragState !== null) return;
+    const shape = this.hand[this.selectedSlotIndex];
+    if (!shape) return;
+
+    this.clearGhostCells();
+    this.clearPredictiveCells();
+
+    if (this.grid.canPlaceShape(shape, r, c)) {
+      const matrix = shape.matrix;
+      const shapeColor = shape.color;
+      for (let mr = 0; mr < matrix.length; mr++) {
+        for (let mc = 0; mc < matrix[0].length; mc++) {
+          if (matrix[mr][mc] === 1) {
+            const gr = r + mr;
+            const gc = c + mc;
+            this.currentGhostCells.push({ r: gr, c: gc });
+            const cellEl = this.getCellElement(gr, gc);
+            if (cellEl) {
+              cellEl.classList.add('ghost', shapeColor);
+            }
+          }
+        }
+      }
+
+      const predicted = this.grid.predictClearedLines(shape, r, c);
+      const isMulti = predicted.rows.length + predicted.cols.length >= 2;
+      for (const pr of predicted.rows) {
+        for (let pc = 0; pc < BOARD_SIZE; pc++) {
+          this.currentPredictiveCells.push({ r: pr, c: pc });
+          const cellEl = this.getCellElement(pr, pc);
+          if (cellEl) {
+            cellEl.classList.add('predictive-line');
+            if (isMulti) cellEl.classList.add('predictive-line-multi');
+          }
+        }
+      }
+      for (const pc of predicted.cols) {
+        for (let pr = 0; pr < BOARD_SIZE; pr++) {
+          this.currentPredictiveCells.push({ r: pr, c: pc });
+          const cellEl = this.getCellElement(pr, pc);
+          if (cellEl) {
+            cellEl.classList.add('predictive-line');
+            if (isMulti) cellEl.classList.add('predictive-line-multi');
+          }
+        }
+      }
+    }
+  }
+
+  private onCellClicked(r: number, c: number): void {
+    if (this.selectedSlotIndex === null) return;
+    const shape = this.hand[this.selectedSlotIndex];
+    if (!shape) {
+      this.deselectSlot();
+      return;
+    }
+
+    if (this.grid.canPlaceShape(shape, r, c)) {
+      const placedCoords = this.grid.placeShape(shape, r, c);
+      sound.playPlace();
+      this.triggerVibrate(15);
+
+      const blockUnitsCount = shape.matrix.flat().filter((v) => v === 1).length;
+      this.addScore(blockUnitsCount * 10);
+
+      this.hand[this.selectedSlotIndex] = null;
+      this.deselectSlot();
+
+      this.renderBoard();
+
+      placedCoords.forEach(({ r: pr, c: pc }) => {
+        const el = this.getCellElement(pr, pc);
+        if (el) {
+          el.classList.add('placed-pop');
+          setTimeout(() => el.classList.remove('placed-pop'), 320);
+        }
+      });
+
+      if (placedCoords.length > 0) {
+        const boardRect = this.boardElement.getBoundingClientRect();
+        const containerRect = this.boardContainerElement.getBoundingClientRect();
+        const avgR = placedCoords.reduce((acc, p) => acc + p.r, 0) / placedCoords.length;
+        const avgC = placedCoords.reduce((acc, p) => acc + p.c, 0) / placedCoords.length;
+        const fx = (boardRect.left - containerRect.left) + (avgC + 0.5) * (this.cachedCellWidth || 38);
+        const fy = (boardRect.top - containerRect.top) + (avgR + 0.5) * (this.cachedCellHeight || 38);
+        this.spawnFloatingScore(fx, fy, `+${blockUnitsCount * 10}`, false);
+      }
+
+      if (this.currentGameMode === 'adventure') {
+        this.adventureMovesRemaining = Math.max(0, this.adventureMovesRemaining - 1);
+        const level = ADVENTURE_LEVELS.find((l) => l.id === this.currentAdventureLevelId);
+        if (level && level.objectiveType === 'target_score') {
+          this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.score);
+        }
+        this.updateAdventureHUD();
+      }
+
+      this.processLineClears();
+
+      if (this.hand.every((s) => s === null)) {
+        this.spawnNewHand(true);
+      } else {
+        this.renderHand(false);
+        this.checkPlayability();
+      }
+    } else {
+      sound.playSnapback();
+      this.triggerVibrate(30);
+      const cellEl = this.getCellElement(r, c);
+      if (cellEl) {
+        cellEl.classList.add('snap-settle');
+        setTimeout(() => cellEl.classList.remove('snap-settle'), 160);
+      }
+      this.showToast("Shape doesn't fit here!");
+    }
+  }
+
+  // 11. Career Statistics Modal & Share
+  private openStatsModal(): void {
+    sound.playPickup();
+    this.statHighScore.textContent = this.bestScore.toLocaleString();
+    this.statGamesPlayed.textContent = this.gamesPlayed.toLocaleString();
+    this.statLinesCleared.textContent = this.totalLinesCleared.toLocaleString();
+    this.statMaxCombo.textContent = `${this.maxCombo}x`;
+    this.pauseModal.classList.add('hidden');
+    this.statsModal.classList.remove('hidden');
+  }
+
+  private closeStatsModal(): void {
+    sound.playPickup();
+    this.statsModal.classList.add('hidden');
+  }
+
+  private shareScore(): void {
+    sound.playPickup();
+    const shareText = `🎮 I just scored ${this.score.toLocaleString()} PTS on Box Blast 2D! Can you beat my high score? Play now: ${window.location.href}`;
+
+    if (navigator.share) {
+      navigator.share({
+        title: 'Box Blast 2D Challenge',
+        text: shareText,
+        url: window.location.href,
+      }).catch(() => {});
+    } else if (navigator.clipboard) {
+      navigator.clipboard.writeText(shareText).then(() => {
+        this.showToast('Challenge copied to clipboard!');
+      }).catch(() => {
+        this.showToast(`Your Score: ${this.score} PTS`);
+      });
+    } else {
+      this.showToast(`Your Score: ${this.score} PTS`);
+    }
+  }
+
+  // 12. Buttons & Interactive Modals Setup
   private setupButtonEvents(): void {
-    // Sound Toggle Button (Vector SVG Switch)
+    // Sound Toggle Button
     this.soundBtn.addEventListener('click', () => {
       sound.enabled = !sound.enabled;
+      localStorage.setItem('box_blast_sound', String(sound.enabled));
       this.updateSoundUI();
       if (sound.enabled) {
         sound.playPickup();
@@ -952,6 +1629,14 @@ export class BlockBlastGame {
       this.pauseModal.classList.add('hidden');
     });
 
+    this.pauseStatsBtn.addEventListener('click', () => {
+      this.openStatsModal();
+    });
+
+    this.closeStatsBtn.addEventListener('click', () => {
+      this.closeStatsModal();
+    });
+
     this.pauseHowToPlayBtn.addEventListener('click', () => {
       sound.playPickup();
       this.pauseModal.classList.add('hidden');
@@ -967,13 +1652,15 @@ export class BlockBlastGame {
     // Modal Toggles
     this.modalToggleSound.addEventListener('click', () => {
       sound.enabled = !sound.enabled;
+      localStorage.setItem('box_blast_sound', String(sound.enabled));
       this.updateSoundUI();
       if (sound.enabled) sound.playPickup();
     });
 
     this.modalToggleHaptic.addEventListener('click', () => {
       this.hapticEnabled = !this.hapticEnabled;
-      this.modalToggleHaptic.classList.toggle('active', this.hapticEnabled);
+      localStorage.setItem('box_blast_haptics', String(this.hapticEnabled));
+      this.updateHapticUI();
       if (this.hapticEnabled) this.triggerVibrate(15);
     });
 
@@ -983,24 +1670,340 @@ export class BlockBlastGame {
       this.tutorialModal.classList.add('hidden');
     });
 
-    // Restart Buttons
+    // Restart Buttons with Double-Tap Safety
+    let restartConfirmPending = false;
+    let restartConfirmTimeout: ReturnType<typeof setTimeout> | null = null;
+
     this.restartBtn.addEventListener('click', () => {
+      sound.unlock();
+      if (this.score > 100 && !this.isGameOver && !restartConfirmPending) {
+        restartConfirmPending = true;
+        this.showToast('Tap restart again to confirm');
+        if (restartConfirmTimeout) clearTimeout(restartConfirmTimeout);
+        restartConfirmTimeout = setTimeout(() => {
+          restartConfirmPending = false;
+        }, 2500);
+        return;
+      }
+      restartConfirmPending = false;
+      if (restartConfirmTimeout) clearTimeout(restartConfirmTimeout);
+
       this.restartIconSvg.classList.remove('spin-anim');
       void this.restartIconSvg.offsetWidth; // trigger reflow
       this.restartIconSvg.classList.add('spin-anim');
       sound.playPickup();
-      this.startNewGame();
+      if (this.currentGameMode === 'adventure') {
+        this.loadAdventureLevel(this.currentAdventureLevelId);
+      } else {
+        this.startNewGame();
+      }
     });
 
     this.modalRestartBtn.addEventListener('click', () => {
+      sound.unlock();
       sound.playPickup();
-      this.startNewGame();
+      if (this.currentGameMode === 'adventure') {
+        this.loadAdventureLevel(this.currentAdventureLevelId);
+      } else {
+        this.startNewGame();
+      }
     });
 
     // Revive Button
     this.modalReviveBtn.addEventListener('click', () => {
       this.performRevive();
     });
+
+    // Share Button
+    this.modalShareBtn.addEventListener('click', () => {
+      this.shareScore();
+    });
+
+    // Background Theme Selector
+    const themeButtons = document.querySelectorAll('.theme-select-btn');
+    themeButtons.forEach((btn) => {
+      btn.addEventListener('click', () => {
+        sound.unlock();
+        sound.playPickup();
+        const theme = (btn as HTMLElement).dataset.theme;
+        if (theme) {
+          this.applyTheme(theme);
+        }
+      });
+    });
+  }
+
+  // 13. Desktop Keyboard Shortcuts
+  private setupKeyboardEvents(): void {
+    window.addEventListener('keydown', (e) => {
+      if ((e.target as HTMLElement)?.tagName === 'INPUT') return;
+
+      const key = e.key.toLowerCase();
+      if (key === 'escape' || key === 'p') {
+        e.preventDefault();
+        sound.playPickup();
+        if (this.pauseModal.classList.contains('hidden')) {
+          if (!this.gameOverModal.classList.contains('hidden')) return;
+          if (!this.statsModal.classList.contains('hidden')) {
+            this.statsModal.classList.add('hidden');
+            return;
+          }
+          this.pauseModal.classList.remove('hidden');
+        } else {
+          this.pauseModal.classList.add('hidden');
+        }
+      } else if (key === 'r') {
+        e.preventDefault();
+        this.restartBtn.click();
+      } else if (key === 'm') {
+        e.preventDefault();
+        this.soundBtn.click();
+      } else if (key === 's') {
+        e.preventDefault();
+        if (this.statsModal.classList.contains('hidden')) {
+          this.openStatsModal();
+        } else {
+          this.closeStatsModal();
+        }
+      } else if (key === '1' || key === '2' || key === '3') {
+        const slotIdx = parseInt(key, 10) - 1;
+        this.toggleSelectSlot(slotIdx);
+      }
+    });
+  }
+
+  // 14. Adventure Mode Implementation
+  private setupAdventureEvents(): void {
+    this.btnModeClassic.addEventListener('click', () => {
+      sound.playPickup();
+      this.switchGameMode('classic');
+    });
+
+    this.btnModeAdventure.addEventListener('click', () => {
+      sound.playPickup();
+      this.switchGameMode('adventure');
+    });
+
+    this.adventureMapBtn.addEventListener('click', () => {
+      sound.playPickup();
+      this.openAdventureMap();
+    });
+
+    this.closeMapBtn.addEventListener('click', () => {
+      sound.playPickup();
+      this.closeAdventureMap();
+    });
+
+    this.nextLevelBtn.addEventListener('click', () => {
+      sound.playPickup();
+      this.levelCompleteModal.classList.add('hidden');
+      const nextId = Math.min(this.currentAdventureLevelId + 1, ADVENTURE_LEVELS.length);
+      this.loadAdventureLevel(nextId);
+    });
+
+    this.replayLevelBtn.addEventListener('click', () => {
+      sound.playPickup();
+      this.levelCompleteModal.classList.add('hidden');
+      this.loadAdventureLevel(this.currentAdventureLevelId);
+    });
+
+    this.victoryMapBtn.addEventListener('click', () => {
+      sound.playPickup();
+      this.levelCompleteModal.classList.add('hidden');
+      this.openAdventureMap();
+    });
+
+    this.retryLevelBtn.addEventListener('click', () => {
+      sound.playPickup();
+      this.levelFailedModal.classList.add('hidden');
+      this.loadAdventureLevel(this.currentAdventureLevelId);
+    });
+
+    this.failMapBtn.addEventListener('click', () => {
+      sound.playPickup();
+      this.levelFailedModal.classList.add('hidden');
+      this.openAdventureMap();
+    });
+  }
+
+  private switchGameMode(mode: 'classic' | 'adventure'): void {
+    this.currentGameMode = mode;
+    this.btnModeClassic.classList.toggle('active', mode === 'classic');
+    this.btnModeClassic.setAttribute('aria-pressed', String(mode === 'classic'));
+    this.btnModeAdventure.classList.toggle('active', mode === 'adventure');
+    this.btnModeAdventure.setAttribute('aria-pressed', String(mode === 'adventure'));
+
+    this.adventureHudBar.classList.toggle('hidden', mode !== 'adventure');
+
+    if (mode === 'classic') {
+      this.showToast('Classic Endless Mode');
+      this.startNewGame();
+    } else {
+      const unlocked = getUnlockedLevel();
+      this.currentAdventureLevelId = unlocked;
+      this.showToast(`Adventure Mode: Level ${this.currentAdventureLevelId}`);
+      this.loadAdventureLevel(this.currentAdventureLevelId);
+    }
+  }
+
+  private loadAdventureLevel(levelId: number): void {
+    const level = ADVENTURE_LEVELS.find((l) => l.id === levelId) || ADVENTURE_LEVELS[0];
+    this.currentAdventureLevelId = level.id;
+    this.isAdventureWon = false;
+    this.isAdventureFailed = false;
+
+    // Reset base game state
+    this.deselectSlot();
+    this.grid.reset();
+    this.score = 0;
+    this.displayedScore = 0;
+    this.comboStreak = 0;
+    this.isGameOver = false;
+    this.hasRevivedThisRun = false;
+    this.scoreElement.textContent = '0';
+    this.updateStreakUI();
+
+    // Populate initial obstacles if defined
+    if (level.initialCells && level.initialCells.length > 0) {
+      level.initialCells.forEach(({ r, c, obstacle, color }) => {
+        this.grid.setObstacle(r, c, obstacle, color);
+      });
+    }
+
+    // Set Adventure Goals
+    this.adventureMovesRemaining = level.moves;
+    this.adventureGoalTarget = level.targetCount;
+    this.adventureGoalCurrent = 0;
+
+    this.updateAdventureHUD(level);
+    this.renderBoard();
+    this.spawnNewHand(true);
+    this.updateCachedBoardGeometry();
+  }
+
+  private updateAdventureHUD(level?: AdventureLevel): void {
+    const currentLvl = level || ADVENTURE_LEVELS.find((l) => l.id === this.currentAdventureLevelId) || ADVENTURE_LEVELS[0];
+    this.adventureLevelBadge.textContent = `LVL ${currentLvl.id}`;
+    this.adventureMovesLeft.textContent = String(this.adventureMovesRemaining);
+
+    // Update goal icon and text
+    if (currentLvl.objectiveType === 'melt_ice') {
+      this.adventureGoalIcon.textContent = '🧊';
+      this.adventureGoalName.textContent = 'Melt Ice';
+    } else if (currentLvl.objectiveType === 'collect_relics') {
+      this.adventureGoalIcon.textContent = '🏺';
+      this.adventureGoalName.textContent = 'Relics';
+    } else if (currentLvl.objectiveType === 'clear_lines') {
+      this.adventureGoalIcon.textContent = '⚡';
+      this.adventureGoalName.textContent = 'Lines';
+    } else {
+      this.adventureGoalIcon.textContent = '🎯';
+      this.adventureGoalName.textContent = 'Score';
+    }
+
+    this.adventureGoalCount.textContent = `${this.adventureGoalCurrent} / ${this.adventureGoalTarget}`;
+
+    // Low moves warning
+    this.adventureMovesChip.classList.toggle('low-moves', this.adventureMovesRemaining <= 3);
+  }
+
+  private triggerAdventureVictory(level: AdventureLevel): void {
+    this.isAdventureWon = true;
+    sound.playMegaComboFanfare();
+    this.particles.spawnHypeCannons(95);
+
+    // Calculate Stars
+    const stars = calculateStars(level, this.score);
+    saveLevelStars(level.id, stars);
+    unlockNextLevel(level.id);
+
+    this.victoryLevelSubtitle.textContent = `${level.chapter} • Level ${level.id}: ${level.name}`;
+    this.victoryScore.textContent = this.score.toLocaleString();
+    this.victoryMovesLeft.textContent = `${this.adventureMovesRemaining} Moves Left`;
+
+    // Update stars UI with staggered bounce
+    const star1 = document.getElementById('star-1')!;
+    const star2 = document.getElementById('star-2')!;
+    const star3 = document.getElementById('star-3')!;
+    const starEls = [star1, star2, star3];
+
+    starEls.forEach((el, idx) => {
+      el.classList.remove('earned');
+      if (idx < stars) {
+        setTimeout(() => el.classList.add('earned'), (idx + 1) * 220);
+      }
+    });
+
+    setTimeout(() => {
+      this.levelCompleteModal.classList.remove('hidden');
+    }, 400);
+  }
+
+  private triggerAdventureFail(): void {
+    this.isAdventureFailed = true;
+    sound.playGameOver();
+    const level = ADVENTURE_LEVELS.find((l) => l.id === this.currentAdventureLevelId);
+    const diff = Math.max(0, this.adventureGoalTarget - this.adventureGoalCurrent);
+    this.failStatusText.textContent = `You needed ${diff} more to complete Level ${this.currentAdventureLevelId}!`;
+    this.failProgressStat.textContent = `${this.adventureGoalCurrent} / ${this.adventureGoalTarget}`;
+    this.failScoreStat.textContent = this.score.toLocaleString();
+
+    setTimeout(() => {
+      this.levelFailedModal.classList.remove('hidden');
+    }, 350);
+  }
+
+  private openAdventureMap(): void {
+    this.renderAdventureMap();
+    this.adventureMapModal.classList.remove('hidden');
+  }
+
+  private closeAdventureMap(): void {
+    this.adventureMapModal.classList.add('hidden');
+  }
+
+  private renderAdventureMap(): void {
+    const unlocked = getUnlockedLevel();
+    let totalStars = 0;
+    this.adventureLevelsGrid.innerHTML = '';
+
+    ADVENTURE_LEVELS.forEach((level) => {
+      const stars = getLevelStars(level.id);
+      totalStars += stars;
+      const isUnlocked = level.id <= unlocked;
+      const isCurrent = level.id === this.currentAdventureLevelId;
+
+      const btn = document.createElement('button');
+      btn.className = `level-node-btn ${isUnlocked ? 'unlocked' : 'locked'} ${isCurrent ? 'current' : ''}`;
+      btn.title = `${level.chapter} - ${level.name}`;
+
+      let starsText = '';
+      if (isUnlocked) {
+        starsText = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+      } else {
+        starsText = '🔒';
+      }
+
+      btn.innerHTML = `
+        <span class="level-num">${level.id}</span>
+        <span class="level-stars-bar">${starsText}</span>
+      `;
+
+      if (isUnlocked) {
+        btn.addEventListener('click', () => {
+          sound.playPickup();
+          this.closeAdventureMap();
+          if (this.currentGameMode !== 'adventure') {
+            this.switchGameMode('adventure');
+          }
+          this.loadAdventureLevel(level.id);
+        });
+      }
+
+      this.adventureLevelsGrid.appendChild(btn);
+    });
+
+    this.mapTotalStars.textContent = `${totalStars} / ${ADVENTURE_LEVELS.length * 3}`;
   }
 
   private getCellElement(r: number, c: number): HTMLElement | null {
