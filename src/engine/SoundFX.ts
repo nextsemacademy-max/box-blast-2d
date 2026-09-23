@@ -20,7 +20,10 @@ class SoundFXEngine {
     1046.50, // C6 (High Masterpiece)
   ];
 
+  private hasUserInteracted: boolean = false;
+
   public unlock(): void {
+    this.hasUserInteracted = true;
     this.initContext();
     if (this.ctx && this.ctx.state === 'suspended') {
       this.ctx.resume().catch(() => {});
@@ -28,6 +31,7 @@ class SoundFXEngine {
   }
 
   private initContext(): void {
+    if (!this.hasUserInteracted) return;
     if (!this.ctx) {
       try {
         const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
@@ -190,9 +194,15 @@ class SoundFXEngine {
     osc.stop(now + 0.18);
   }
 
+  private lastScoreTickTime: number = 0;
+
   // Soft Score Rolling Tick
   public playScoreTick() {
     if (!this.enabled) return;
+    const realNow = performance.now();
+    if (realNow - this.lastScoreTickTime < 45) return;
+    this.lastScoreTickTime = realNow;
+
     this.initContext();
     if (!this.ctx) return;
 

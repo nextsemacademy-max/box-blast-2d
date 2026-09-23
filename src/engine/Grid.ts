@@ -1,6 +1,6 @@
 import { GridCellState, ShapeDefinition, ClearResult, ObstacleType, ColorTheme } from './types';
 
-export const BOARD_SIZE = 8;
+export const BOARD_SIZE = 9;
 
 export class GridEngine {
   public board: GridCellState[][];
@@ -276,7 +276,7 @@ export class GridEngine {
   /**
    * Rewarded Ad Revive: Clears a 3x3 area around center to free up space
    */
-  public clearBombArea(centerR: number = 3, centerC: number = 3): { r: number; c: number }[] {
+  public clearBombArea(centerR: number = 4, centerC: number = 4): { r: number; c: number }[] {
     const cleared: { r: number; c: number }[] = [];
     for (let r = centerR - 1; r <= centerR + 1; r++) {
       for (let c = centerC - 1; c <= centerC + 1; c++) {

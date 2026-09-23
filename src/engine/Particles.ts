@@ -72,7 +72,8 @@ export class ParticleEngine {
   public resize(): void {
     const rect = this.canvas.parentElement?.getBoundingClientRect();
     if (rect && rect.width > 0 && rect.height > 0) {
-      this.dpr = Math.min(window.devicePixelRatio || 1, 3);
+      // Cap DPR to 2 for maximum GPU efficiency and zero fillrate bottleneck
+      this.dpr = Math.min(window.devicePixelRatio || 1, 2);
       this.logicalWidth = rect.width;
       this.logicalHeight = rect.height;
       this.canvas.width = Math.round(rect.width * this.dpr);
@@ -81,16 +82,23 @@ export class ParticleEngine {
   }
 
   // Spawns glossy marble beads and expanding shockwave rings
-  public spawnBurst(x: number, y: number, color: string, count: number = 16): void {
-    // 1. Expanding Shockwave Ring
-    this.shockwaves.push({
-      x,
-      y,
-      radius: 4,
-      maxRadius: 36,
-      color,
-      alpha: 0.9,
-    });
+  public spawnBurst(x: number, y: number, color: string, count: number = 7): void {
+    // 1. Expanding Shockwave Ring (budgeted for mobile GPU)
+    if (this.shockwaves.length < 3) {
+      this.shockwaves.push({
+        x,
+        y,
+        radius: 4,
+        maxRadius: 32,
+        color,
+        alpha: 0.85,
+      });
+    }
+
+    // Cap active particle count to prevent garbage collection spikes on mobile
+    if (this.particles.length > 50) {
+      this.particles.splice(0, this.particles.length - 40);
+    }
 
     // 2. High-speed marble beads & sparkles
     for (let i = 0; i < count; i++) {
@@ -103,14 +111,14 @@ export class ParticleEngine {
         y,
         vx: Math.cos(angle) * speed,
         vy: Math.sin(angle) * speed - 2.5, // upward initial pop
-        size: isBead ? Math.random() * 7 + 4 : Math.random() * 4 + 2,
+        size: isBead ? Math.random() * 6 + 3.5 : Math.random() * 3.5 + 2,
         color,
         alpha: 1,
-        rotation: Math.random() * Math.PI * 2,
-        vRot: (Math.random() - 0.5) * 0.3,
+        rotation: 0,
+        vRot: 0,
         isBead,
         life: 0,
-        maxLife: Math.random() * 25 + 22,
+        maxLife: Math.random() * 22 + 20,
       });
     }
 
@@ -118,7 +126,11 @@ export class ParticleEngine {
   }
 
   // Spawns radial celebratory confetti from a point
-  public spawnMegaConfetti(x: number, y: number, count: number = 70): void {
+  public spawnMegaConfetti(x: number, y: number, count: number = 36): void {
+    if (this.confetti.length > 50) {
+      this.confetti.splice(0, this.confetti.length - 35);
+    }
+
     for (let i = 0; i < count; i++) {
       const angle = Math.random() * Math.PI * 2;
       const speed = Math.random() * 8 + 3;
@@ -140,7 +152,7 @@ export class ParticleEngine {
         vFlutter: Math.random() * 0.18 + 0.08,
         isStar,
         life: 0,
-        maxLife: Math.random() * 40 + 45,
+        maxLife: Math.random() * 36 + 40,
       });
     }
 
@@ -148,9 +160,13 @@ export class ParticleEngine {
   }
 
   // Dual cannons shooting from bottom corners across the board
-  public spawnHypeCannons(count: number = 80): void {
+  public spawnHypeCannons(count: number = 40): void {
     const w = this.logicalWidth || 380;
     const h = this.logicalHeight || 380;
+
+    if (this.confetti.length > 50) {
+      this.confetti.splice(0, this.confetti.length - 30);
+    }
 
     for (let i = 0; i < count; i++) {
       const fromLeft = i % 2 === 0;
@@ -177,7 +193,7 @@ export class ParticleEngine {
         vFlutter: Math.random() * 0.2 + 0.09,
         isStar,
         life: 0,
-        maxLife: Math.random() * 50 + 55,
+        maxLife: Math.random() * 45 + 45,
       });
     }
 
@@ -204,62 +220,49 @@ export class ParticleEngine {
     this.ctx.save();
     this.ctx.scale(this.dpr, this.dpr);
 
-    // 1. Render & update Shockwaves
+    // 1. Render & update Shockwaves (Zero matrix save/restore overhead)
+    this.ctx.lineWidth = 2.5;
     for (let i = this.shockwaves.length - 1; i >= 0; i--) {
       const sw = this.shockwaves[i];
       sw.radius += 2.2;
       sw.alpha = Math.max(0, 1 - sw.radius / sw.maxRadius);
 
-      this.ctx.save();
       this.ctx.strokeStyle = sw.color;
-      this.ctx.lineWidth = 2.5;
       this.ctx.globalAlpha = sw.alpha;
       this.ctx.beginPath();
       this.ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
       this.ctx.stroke();
-      this.ctx.restore();
 
       if (sw.radius >= sw.maxRadius) {
         this.shockwaves.splice(i, 1);
       }
     }
 
-    // 2. Render & update Particles (Glossy marble beads & sparkles)
+    // 2. Render & update Particles (High-performance direct circle rendering)
     for (let i = this.particles.length - 1; i >= 0; i--) {
       const p = this.particles[i];
       p.x += p.vx;
       p.y += p.vy;
       p.vy += 0.22; // gravity
       p.vx *= 0.95; // air friction
-      p.rotation += p.vRot;
       p.life++;
       p.alpha = Math.max(0, 1 - p.life / p.maxLife);
 
-      this.ctx.save();
       this.ctx.globalAlpha = p.alpha;
       this.ctx.fillStyle = p.color;
-      this.ctx.translate(p.x, p.y);
-      this.ctx.rotate(p.rotation);
+
+      // Direct symmetrical arc without matrix translation/rotation
+      this.ctx.beginPath();
+      this.ctx.arc(p.x, p.y, p.size * 0.5, 0, Math.PI * 2);
+      this.ctx.fill();
 
       if (p.isBead) {
-        // Spherical marble bead with specular glint
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
-        this.ctx.fill();
-
-        // White specular glint
+        // Specular glint in top-left
         this.ctx.fillStyle = '#ffffff';
         this.ctx.beginPath();
-        this.ctx.arc(-p.size / 6, -p.size / 6, Math.max(0.8, p.size / 5), 0, Math.PI * 2);
-        this.ctx.fill();
-      } else {
-        // Glowing round sparkle
-        this.ctx.beginPath();
-        this.ctx.arc(0, 0, p.size / 2, 0, Math.PI * 2);
+        this.ctx.arc(p.x - p.size * 0.16, p.y - p.size * 0.16, Math.max(0.7, p.size * 0.2), 0, Math.PI * 2);
         this.ctx.fill();
       }
-
-      this.ctx.restore();
 
       if (p.life >= p.maxLife) {
         this.particles.splice(i, 1);

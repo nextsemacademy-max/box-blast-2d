@@ -75,6 +75,8 @@ export class BlockBlastGame {
   private adventureGoalCount: HTMLElement;
   private adventureMovesLeft: HTMLElement;
   private adventureMovesChip: HTMLElement;
+  private adventureGoalProgressFill: HTMLElement;
+  private failReviveBtn: HTMLElement;
   private adventureMapModal: HTMLElement;
   private mapTotalStars: HTMLElement;
   private adventureLevelsGrid: HTMLElement;
@@ -125,6 +127,8 @@ export class BlockBlastGame {
 
   // Cached Geometry & Direct Cell Array for 120fps Zero-Lag Dragging
   private cachedBoardRect: DOMRect | null = null;
+  private cachedBoardOffsetX: number = 0;
+  private cachedBoardOffsetY: number = 0;
   private cachedCellWidth: number = 0;
   private cachedCellHeight: number = 0;
   private cellElementsGrid: HTMLElement[][] = [];
@@ -138,6 +142,7 @@ export class BlockBlastGame {
   private latestPointerX: number = 0;
   private latestPointerY: number = 0;
   private sparkleTimer: ReturnType<typeof setInterval> | null = null;
+  private scoreRollingInterval: ReturnType<typeof setInterval> | null = null;
 
   // Combo Celebration Titles
   private comboHypeTitles = [
@@ -211,6 +216,8 @@ export class BlockBlastGame {
     this.adventureGoalCount = document.getElementById('adventure-goal-count')!;
     this.adventureMovesLeft = document.getElementById('adventure-moves-left')!;
     this.adventureMovesChip = document.querySelector('.adventure-moves-chip')!;
+    this.adventureGoalProgressFill = document.getElementById('adventure-goal-progress-fill')!;
+    this.failReviveBtn = document.getElementById('fail-revive-btn')!;
     this.adventureMapModal = document.getElementById('adventure-map-modal')!;
     this.mapTotalStars = document.getElementById('map-total-stars')!;
     this.adventureLevelsGrid = document.getElementById('adventure-levels-grid')!;
@@ -242,12 +249,21 @@ export class BlockBlastGame {
     this.startNewGame();
     this.startIdleSparkleTimer();
 
-    // Re-cache board rect on window resize
+    // Re-cache board rect on window resize and board element resize
     window.addEventListener('resize', () => {
       if (this.boardElement) {
         this.updateCachedBoardGeometry();
+        this.particles.resize();
       }
     });
+
+    if ('ResizeObserver' in window && this.boardElement) {
+      const ro = new ResizeObserver(() => {
+        this.updateCachedBoardGeometry();
+        this.particles.resize();
+      });
+      ro.observe(this.boardElement);
+    }
   }
 
   private initStorage(): void {
@@ -282,6 +298,17 @@ export class BlockBlastGame {
     this.gameWrapperEl.classList.remove('theme-cosmic', 'theme-wood', 'theme-neon', 'theme-dark');
     this.gameWrapperEl.classList.add(theme);
 
+    const activePill = document.getElementById('active-theme-name');
+    if (activePill) {
+      const names: Record<string, string> = {
+        'theme-cosmic': 'Cosmic',
+        'theme-wood': 'Wood',
+        'theme-neon': 'Neon',
+        'theme-dark': 'Dark',
+      };
+      activePill.textContent = names[theme] || 'Custom';
+    }
+
     const buttons = document.querySelectorAll('.theme-select-btn');
     buttons.forEach((btn) => {
       if ((btn as HTMLElement).dataset.theme === theme) {
@@ -290,6 +317,15 @@ export class BlockBlastGame {
         btn.classList.remove('active');
       }
     });
+  }
+
+  private updateMiniStats(): void {
+    const miniBest = document.getElementById('settings-mini-best');
+    const miniLines = document.getElementById('settings-mini-lines');
+    const miniCombo = document.getElementById('settings-mini-combo');
+    if (miniBest) miniBest.textContent = this.bestScore.toLocaleString();
+    if (miniLines) miniLines.textContent = this.totalLinesCleared.toLocaleString();
+    if (miniCombo) miniCombo.textContent = `${this.maxCombo}x`;
   }
 
   private setupAudioUnlock(): void {
@@ -307,6 +343,10 @@ export class BlockBlastGame {
     this.grid.reset();
     this.score = 0;
     this.displayedScore = 0;
+    if (this.scoreRollingInterval) {
+      clearInterval(this.scoreRollingInterval);
+      this.scoreRollingInterval = null;
+    }
     this.comboStreak = 0;
     this.isGameOver = false;
     this.hasRevivedThisRun = false;
@@ -329,7 +369,11 @@ export class BlockBlastGame {
   }
 
   private updateCachedBoardGeometry(): void {
+    if (!this.boardElement || !this.boardContainerElement) return;
     this.cachedBoardRect = this.boardElement.getBoundingClientRect();
+    const containerRect = this.boardContainerElement.getBoundingClientRect();
+    this.cachedBoardOffsetX = this.cachedBoardRect.left - containerRect.left;
+    this.cachedBoardOffsetY = this.cachedBoardRect.top - containerRect.top;
     this.cachedCellWidth = this.cachedBoardRect.width / BOARD_SIZE;
     this.cachedCellHeight = this.cachedBoardRect.height / BOARD_SIZE;
   }
@@ -404,12 +448,19 @@ export class BlockBlastGame {
 
       const rows = shape.matrix.length;
       const cols = shape.matrix[0].length;
-      container.style.gridTemplateRows = `repeat(${rows}, 18px)`;
-      container.style.gridTemplateColumns = `repeat(${cols}, 18px)`;
+      const maxDim = Math.max(rows, cols);
+      const unitSize = maxDim >= 5 ? 13 : (maxDim >= 4 ? 15 : 18);
+      const gapSize = maxDim >= 4 ? 2 : 3;
+
+      container.style.gap = `${gapSize}px`;
+      container.style.gridTemplateRows = `repeat(${rows}, ${unitSize}px)`;
+      container.style.gridTemplateColumns = `repeat(${cols}, ${unitSize}px)`;
 
       for (let r = 0; r < rows; r++) {
         for (let c = 0; c < cols; c++) {
           const unit = document.createElement('div');
+          unit.style.width = `${unitSize}px`;
+          unit.style.height = `${unitSize}px`;
           if (shape.matrix[r][c] === 1) {
             unit.className = `block-unit ${shape.color}`;
           } else {
@@ -432,7 +483,7 @@ export class BlockBlastGame {
     if (this.dragState) {
       const slot = document.getElementById(`slot-${this.dragState.slotIndex}`);
       if (slot && slot.firstElementChild) {
-        (slot.firstElementChild as HTMLElement).style.visibility = 'visible';
+        (slot.firstElementChild as HTMLElement).style.opacity = '1';
       }
     }
     this.dragProxyElement.classList.remove('spring-returning');
@@ -460,9 +511,8 @@ export class BlockBlastGame {
     this.triggerVibrate(10);
 
     const isTouch = e.pointerType === 'touch' || e.pointerType === 'pen';
-    const cellH = this.cachedCellHeight || 42;
-    // Ergonomic thumb offset: ~44-48px (just above thumb tip) for instant 1:1 single-hand control
-    const touchOffsetY = isTouch ? Math.min(50, Math.max(38, Math.round(cellH * 1.12))) : 0;
+    // Zero artificial offset so the piece stays directly under the finger/cursor without jumping upwards
+    const touchOffsetY = 0;
 
     let grabOffsetX = 0;
     let grabOffsetY = 0;
@@ -499,7 +549,7 @@ export class BlockBlastGame {
     // Cleanly hide original shape in slot
     const slot = document.getElementById(`slot-${slotIndex}`);
     if (slot && slot.firstElementChild) {
-      (slot.firstElementChild as HTMLElement).style.visibility = 'hidden';
+      (slot.firstElementChild as HTMLElement).style.opacity = '0';
     }
 
     // Build Drag Proxy matching grid cell dimensions
@@ -545,6 +595,16 @@ export class BlockBlastGame {
     this.dragProxyElement.style.transform = `translate3d(${x}px, ${y}px, 0) translate(-50%, -50%) scale(1.06)`;
   }
 
+  private onDragTick = (): void => {
+    if (!this.dragState) {
+      this.rafDragPending = false;
+      return;
+    }
+    this.rafDragPending = false;
+    this.setProxyTransform(this.latestPointerX, this.latestPointerY);
+    this.updateGhostPlacement(this.latestPointerX, this.latestPointerY);
+  };
+
   private setupGlobalPointerEvents(): void {
     window.addEventListener('pointermove', (e) => {
       if (!this.dragState) return;
@@ -560,23 +620,30 @@ export class BlockBlastGame {
       this.latestPointerX = e.clientX - grabX;
       this.latestPointerY = e.clientY - this.dragState.touchOffsetY - grabY;
 
-      // 0ms instant 1:1 hardware transform
-      this.setProxyTransform(this.latestPointerX, this.latestPointerY);
+      if (!this.rafDragPending) {
+        this.rafDragPending = true;
+        requestAnimationFrame(this.onDragTick);
+      }
+    }, { passive: false });
 
-      // 0ms instant ghost placement (zero wait time!)
-      this.updateGhostPlacement(this.latestPointerX, this.latestPointerY);
+    // Prevent any browser page scrolling / rubber-banding while dragging
+    window.addEventListener('touchmove', (e) => {
+      if (this.dragState) {
+        e.preventDefault();
+      }
     }, { passive: false });
 
     window.addEventListener('pointerup', (e) => {
       if (!this.dragState) return;
       e.preventDefault();
+      this.rafDragPending = false;
 
       // If released with minimal movement, treat as a TAP/CLICK on the slot
       if (!this.dragMoved) {
         const slotIdx = this.dragState.slotIndex;
         const slot = document.getElementById(`slot-${slotIdx}`);
         if (slot && slot.firstElementChild) {
-          (slot.firstElementChild as HTMLElement).style.visibility = 'visible';
+          (slot.firstElementChild as HTMLElement).style.opacity = '1';
         }
         this.cleanupDrag();
         this.toggleSelectSlot(slotIdx);
@@ -592,6 +659,7 @@ export class BlockBlastGame {
 
     window.addEventListener('pointercancel', () => {
       if (!this.dragState) return;
+      this.rafDragPending = false;
       this.triggerSpringSnapback();
     });
   }
@@ -650,9 +718,7 @@ export class BlockBlastGame {
         if (!this.wasPredicting) {
           this.wasPredicting = true;
           sound.playPredictiveChord();
-          if ('vibrate' in navigator) {
-            navigator.vibrate?.(12);
-          }
+          this.triggerVibrate(12);
         }
 
         const isMulti = (predicted.rows.length + predicted.cols.length) >= 2;
@@ -809,10 +875,7 @@ export class BlockBlastGame {
         // Place shape!
         const placedCoords = this.grid.placeShape(this.dragState.shape, startRow, startCol);
         sound.playPlace();
-
-        if ('vibrate' in navigator) {
-          navigator.vibrate?.(15);
-        }
+        this.triggerVibrate(15);
 
         // Add placement points (10 pts per block unit)
         const blockUnitsCount = this.dragState.shape.matrix.flat().filter(v => v === 1).length;
@@ -834,14 +897,12 @@ export class BlockBlastGame {
           }
         });
 
-        // Floating flying score for piece drop
+        // Floating flying score for piece drop (Zero reflow)
         if (placedCoords.length > 0) {
-          const boardRect = this.boardElement.getBoundingClientRect();
-          const containerRect = this.boardContainerElement.getBoundingClientRect();
           const avgR = placedCoords.reduce((acc, p) => acc + p.r, 0) / placedCoords.length;
           const avgC = placedCoords.reduce((acc, p) => acc + p.c, 0) / placedCoords.length;
-          const fx = (boardRect.left - containerRect.left) + (avgC + 0.5) * (this.cachedCellWidth || 38);
-          const fy = (boardRect.top - containerRect.top) + (avgR + 0.5) * (this.cachedCellHeight || 38);
+          const fx = this.cachedBoardOffsetX + (avgC + 0.5) * (this.cachedCellWidth || 38);
+          const fy = this.cachedBoardOffsetY + (avgR + 0.5) * (this.cachedCellHeight || 38);
           this.spawnFloatingScore(fx, fy, `+${placementPoints}`, false);
         }
 
@@ -897,7 +958,7 @@ export class BlockBlastGame {
 
       setTimeout(() => {
         if (slotEl.firstElementChild) {
-          (slotEl.firstElementChild as HTMLElement).style.visibility = 'visible';
+          (slotEl.firstElementChild as HTMLElement).style.opacity = '1';
           slotEl.classList.add('snap-settle');
           setTimeout(() => slotEl.classList.remove('snap-settle'), 120);
         }
@@ -927,6 +988,7 @@ export class BlockBlastGame {
     this.wasPredicting = false;
     this.lastGhostRow = -999;
     this.lastGhostCol = -999;
+    this.rafDragPending = false;
     this.dragProxyElement.classList.add('hidden');
     this.dragProxyElement.innerHTML = '';
     this.dragState = null;
@@ -955,13 +1017,7 @@ export class BlockBlastGame {
         sound.playMegaComboFanfare();
       }
 
-      if ('vibrate' in navigator) {
-        if (this.comboStreak >= 3) {
-          navigator.vibrate?.([20, 30, 25]);
-        } else {
-          navigator.vibrate?.([15, 20]);
-        }
-      }
+      this.triggerVibrate(this.comboStreak >= 3 ? [20, 30, 25] : [15, 20]);
 
       // High-Rewarding Points Calculation:
       let baseLinePoints = 150;
@@ -1021,12 +1077,15 @@ export class BlockBlastGame {
   }
 
   private triggerStaggeredLineClears(clearedRows: number[], clearedCols: number[], pointsEarned: number, isCleanSlate: boolean = false): void {
-    const containerRect = this.boardContainerElement.getBoundingClientRect();
+    const boardOffsetX = this.cachedBoardOffsetX;
+    const boardOffsetY = this.cachedBoardOffsetY;
+    const cellWidth = this.cachedCellWidth || 42;
+    const cellHeight = this.cachedCellHeight || 42;
 
-    // Board screen shake
+    // Board screen shake on inner grid (Zero outer container reflow)
     const shakeClass = clearedRows.length + clearedCols.length >= 2 ? 'board-shake-heavy' : 'board-shake-light';
-    this.boardContainerElement.classList.add(shakeClass);
-    setTimeout(() => this.boardContainerElement.classList.remove(shakeClass), 240);
+    this.boardElement.classList.add(shakeClass);
+    setTimeout(() => this.boardElement.classList.remove(shakeClass), 240);
 
     // Real-Time Laser Sweep Elimination Effect
     this.spawnLaserBeams(clearedRows, clearedCols, clearedRows.length + clearedCols.length >= 2);
@@ -1053,13 +1112,13 @@ export class BlockBlastGame {
       const delay = Math.min(inRow ? c * 20 : 999, inCol ? r * 20 : 999);
       const particleColor = inRow && inCol ? '#f59e0b' : inRow ? '#22d3ee' : '#10b981';
 
-      setTimeout(() => {
-        const cellRect = cellEl.getBoundingClientRect();
-        const x = cellRect.left - containerRect.left + cellRect.width / 2;
-        const y = cellRect.top - containerRect.top + cellRect.height / 2;
+      // Zero-reflow mathematical coordinates
+      const x = boardOffsetX + (c + 0.5) * cellWidth;
+      const y = boardOffsetY + (r + 0.5) * cellHeight;
 
+      setTimeout(() => {
         cellEl.classList.add('clearing');
-        this.particles.spawnBurst(x, y, particleColor, 14);
+        this.particles.spawnBurst(x, y, particleColor, 4);
 
         setTimeout(() => {
           cellEl.className = 'grid-cell';
@@ -1071,9 +1130,8 @@ export class BlockBlastGame {
     this.triggerComboCelebration(pointsEarned, isCleanSlate);
 
     // Floating Flying Score Numbers
-    const boardRect = this.boardElement.getBoundingClientRect();
-    const fx = (boardRect.left - containerRect.left) + boardRect.width / 2;
-    const fy = (boardRect.top - containerRect.top) + boardRect.height / 2;
+    const fx = boardOffsetX + (this.cachedCellWidth || 42) * BOARD_SIZE / 2;
+    const fy = boardOffsetY + (this.cachedCellHeight || 42) * BOARD_SIZE / 2;
     this.spawnFloatingScore(fx, fy, `+${pointsEarned.toLocaleString()}`, true);
   }
 
@@ -1096,16 +1154,15 @@ export class BlockBlastGame {
     setTimeout(() => celebration.remove(), 900);
   }
 
-  // Real-Time Laser Beam Elimination Sweep
+  // Real-Time Laser Beam Elimination Sweep (Zero layout thrashing)
   private spawnLaserBeams(clearedRows: number[], clearedCols: number[], isMulti: boolean): void {
-    const containerRect = this.boardContainerElement.getBoundingClientRect();
+    const boardOffsetX = this.cachedBoardOffsetX;
+    const boardOffsetY = this.cachedBoardOffsetY;
+    const cellWidth = this.cachedCellWidth || 42;
+    const cellHeight = this.cachedCellHeight || 42;
 
     clearedRows.forEach((r) => {
-      const cell = this.getCellElement(r, 0);
-      if (!cell) return;
-      const rect = cell.getBoundingClientRect();
-      const top = rect.top - containerRect.top + rect.height / 2;
-
+      const top = boardOffsetY + (r + 0.5) * cellHeight;
       const beam = document.createElement('div');
       beam.className = isMulti ? 'laser-beam laser-beam-row laser-gold' : 'laser-beam laser-beam-row';
       beam.style.top = `${top}px`;
@@ -1114,11 +1171,7 @@ export class BlockBlastGame {
     });
 
     clearedCols.forEach((c) => {
-      const cell = this.getCellElement(0, c);
-      if (!cell) return;
-      const rect = cell.getBoundingClientRect();
-      const left = rect.left - containerRect.left + rect.width / 2;
-
+      const left = boardOffsetX + (c + 0.5) * cellWidth;
       const beam = document.createElement('div');
       beam.className = isMulti ? 'laser-beam laser-beam-col laser-gold' : 'laser-beam laser-beam-col';
       beam.style.left = `${left}px`;
@@ -1204,23 +1257,33 @@ export class BlockBlastGame {
     this.scoreElement.classList.add('bump');
     setTimeout(() => this.scoreElement.classList.remove('bump'), 140);
 
-    const step = Math.max(1, Math.ceil(diff / 12));
-    const interval = setInterval(() => {
+    if (this.scoreRollingInterval) {
+      clearInterval(this.scoreRollingInterval);
+      this.scoreRollingInterval = null;
+    }
+
+    const step = Math.max(1, Math.ceil(diff / 10));
+    this.scoreRollingInterval = setInterval(() => {
       if (this.displayedScore < target) {
         this.displayedScore = Math.min(this.displayedScore + step, target);
         this.scoreElement.textContent = this.displayedScore.toLocaleString();
         sound.playScoreTick();
       } else {
-        clearInterval(interval);
+        if (this.scoreRollingInterval) {
+          clearInterval(this.scoreRollingInterval);
+          this.scoreRollingInterval = null;
+        }
         this.scoreElement.textContent = target.toLocaleString();
       }
-    }, 18);
+    }, 24);
   }
 
   private updateStreakUI(): void {
     this.streakIndicatorElement.textContent = `Streak: ${this.comboStreak}`;
+    const bannerZone = this.comboBadgeElement.parentElement;
 
     if (this.comboStreak >= 2) {
+      if (bannerZone) bannerZone.classList.add('has-combo');
       this.comboBadgeElement.classList.remove('hidden');
       this.comboTextElement.textContent = `COMBO x${this.comboStreak}`;
       this.streakIndicatorElement.classList.add('active');
@@ -1233,6 +1296,7 @@ export class BlockBlastGame {
         this.boardContainerElement.classList.add('combo-aura');
       }
     } else {
+      if (bannerZone) bannerZone.classList.remove('has-combo');
       this.comboBadgeElement.classList.add('hidden');
       this.streakIndicatorElement.classList.remove('active');
       this.boardContainerElement.classList.remove('combo-aura', 'combo-aura-super');
@@ -1289,10 +1353,7 @@ export class BlockBlastGame {
   private triggerGameOver(): void {
     this.isGameOver = true;
     sound.playGameOver();
-
-    if ('vibrate' in navigator) {
-      navigator.vibrate?.([60, 40, 80]);
-    }
+    this.triggerVibrate([60, 40, 80]);
 
     this.modalFinalScore.textContent = this.score.toLocaleString();
     this.modalBestScore.textContent = this.bestScore.toLocaleString();
@@ -1342,22 +1403,18 @@ export class BlockBlastGame {
     this.isGameOver = false;
 
     // Clear 3x3 center bomb zone
-    const cleared = this.grid.clearBombArea(3, 3);
+    const center = Math.floor(BOARD_SIZE / 2);
+    const cleared = this.grid.clearBombArea(center, center);
     this.renderBoard();
     sound.playRevive();
 
-    // Particle explosion across cleared zone
-    const containerRect = this.boardContainerElement.getBoundingClientRect();
+    // Particle explosion across cleared zone (Zero layout thrashing)
     cleared.forEach(({ r, c }: { r: number; c: number }, idx: number) => {
-      const cell = this.getCellElement(r, c);
-      if (cell) {
-        const cellRect = cell.getBoundingClientRect();
-        const x = cellRect.left - containerRect.left + cellRect.width / 2;
-        const y = cellRect.top - containerRect.top + cellRect.height / 2;
-        setTimeout(() => {
-          this.particles.spawnBurst(x, y, '#10b981', 12);
-        }, idx * 15);
-      }
+      const x = this.cachedBoardOffsetX + (c + 0.5) * (this.cachedCellWidth || 38);
+      const y = this.cachedBoardOffsetY + (r + 0.5) * (this.cachedCellHeight || 38);
+      setTimeout(() => {
+        this.particles.spawnBurst(x, y, '#10b981', 12);
+      }, idx * 15);
     });
 
     this.particles.spawnHypeCannons(70);
@@ -1380,8 +1437,13 @@ export class BlockBlastGame {
     }, 1600);
   }
 
+  private lastVibrateTime: number = 0;
+
   private triggerVibrate(pattern: number | number[]): void {
     if (!this.hapticEnabled) return;
+    const now = performance.now();
+    if (now - this.lastVibrateTime < 60 && typeof pattern === 'number' && pattern < 20) return;
+    this.lastVibrateTime = now;
     if ('vibrate' in navigator) {
       try {
         navigator.vibrate?.(pattern);
@@ -1531,12 +1593,10 @@ export class BlockBlastGame {
       });
 
       if (placedCoords.length > 0) {
-        const boardRect = this.boardElement.getBoundingClientRect();
-        const containerRect = this.boardContainerElement.getBoundingClientRect();
         const avgR = placedCoords.reduce((acc, p) => acc + p.r, 0) / placedCoords.length;
         const avgC = placedCoords.reduce((acc, p) => acc + p.c, 0) / placedCoords.length;
-        const fx = (boardRect.left - containerRect.left) + (avgC + 0.5) * (this.cachedCellWidth || 38);
-        const fy = (boardRect.top - containerRect.top) + (avgR + 0.5) * (this.cachedCellHeight || 38);
+        const fx = this.cachedBoardOffsetX + (avgC + 0.5) * (this.cachedCellWidth || 38);
+        const fy = this.cachedBoardOffsetY + (avgR + 0.5) * (this.cachedCellHeight || 38);
         this.spawnFloatingScore(fx, fy, `+${blockUnitsCount * 10}`, false);
       }
 
@@ -1621,8 +1681,26 @@ export class BlockBlastGame {
     // Pause / Settings Button
     this.pauseBtn.addEventListener('click', () => {
       sound.playPickup();
+      this.updateMiniStats();
       this.pauseModal.classList.remove('hidden');
     });
+
+    // Modal Close (X) Button
+    const closeSettingsX = document.getElementById('close-settings-x-btn');
+    if (closeSettingsX) {
+      closeSettingsX.addEventListener('click', () => {
+        sound.playPickup();
+        this.pauseModal.classList.add('hidden');
+      });
+    }
+
+    // Header Quick Career Stats Button
+    const headerStatsBtn = document.getElementById('header-stats-btn');
+    if (headerStatsBtn) {
+      headerStatsBtn.addEventListener('click', () => {
+        this.openStatsModal();
+      });
+    }
 
     this.resumeGameBtn.addEventListener('click', () => {
       sound.playPickup();
@@ -1824,6 +1902,34 @@ export class BlockBlastGame {
       this.levelFailedModal.classList.add('hidden');
       this.openAdventureMap();
     });
+
+    if (this.failReviveBtn) {
+      this.failReviveBtn.addEventListener('click', () => {
+        sound.playRevive();
+        this.particles.spawnHypeCannons(35);
+        this.levelFailedModal.classList.add('hidden');
+        this.isAdventureFailed = false;
+        this.adventureMovesRemaining += 5;
+        this.updateAdventureHUD();
+        this.showToast('+5 Extra Moves! Keep going!');
+      });
+    }
+
+    const advBackBtn = document.getElementById('adv-back-classic-btn');
+    if (advBackBtn) {
+      advBackBtn.addEventListener('click', () => {
+        sound.playPickup();
+        this.switchGameMode('classic');
+      });
+    }
+
+    const advPauseBtn = document.getElementById('adv-pause-btn');
+    if (advPauseBtn) {
+      advPauseBtn.addEventListener('click', () => {
+        sound.playPickup();
+        this.pauseBtn.click();
+      });
+    }
   }
 
   private switchGameMode(mode: 'classic' | 'adventure'): void {
@@ -1833,7 +1939,20 @@ export class BlockBlastGame {
     this.btnModeAdventure.classList.toggle('active', mode === 'adventure');
     this.btnModeAdventure.setAttribute('aria-pressed', String(mode === 'adventure'));
 
+    this.gameWrapperEl.classList.toggle('mode-adventure', mode === 'adventure');
+
+    // Hide classic header and mode bar in Adventure mode for a 100% unified single-bar HUD
+    const classicHeader = document.querySelector('.hud-header');
+    const modeNavBar = document.querySelector('.mode-nav-bar');
+    if (classicHeader) classicHeader.classList.toggle('hidden', mode === 'adventure');
+    if (modeNavBar) modeNavBar.classList.toggle('hidden', mode === 'adventure');
     this.adventureHudBar.classList.toggle('hidden', mode !== 'adventure');
+
+    // Recalculate board geometry for seamless responsive layout transition
+    requestAnimationFrame(() => {
+      this.updateCachedBoardGeometry();
+      this.particles.resize();
+    });
 
     if (mode === 'classic') {
       this.showToast('Classic Endless Mode');
@@ -1903,6 +2022,12 @@ export class BlockBlastGame {
 
     this.adventureGoalCount.textContent = `${this.adventureGoalCurrent} / ${this.adventureGoalTarget}`;
 
+    // Update goal micro progress bar fill
+    if (this.adventureGoalProgressFill) {
+      const pct = Math.min(100, Math.round((this.adventureGoalCurrent / Math.max(1, this.adventureGoalTarget)) * 100));
+      this.adventureGoalProgressFill.style.width = `${pct}%`;
+    }
+
     // Low moves warning
     this.adventureMovesChip.classList.toggle('low-moves', this.adventureMovesRemaining <= 3);
   }
@@ -1967,41 +2092,83 @@ export class BlockBlastGame {
     let totalStars = 0;
     this.adventureLevelsGrid.innerHTML = '';
 
+    // Group levels by chapter
+    const chapters: { [chapterName: string]: AdventureLevel[] } = {};
     ADVENTURE_LEVELS.forEach((level) => {
-      const stars = getLevelStars(level.id);
-      totalStars += stars;
-      const isUnlocked = level.id <= unlocked;
-      const isCurrent = level.id === this.currentAdventureLevelId;
-
-      const btn = document.createElement('button');
-      btn.className = `level-node-btn ${isUnlocked ? 'unlocked' : 'locked'} ${isCurrent ? 'current' : ''}`;
-      btn.title = `${level.chapter} - ${level.name}`;
-
-      let starsText = '';
-      if (isUnlocked) {
-        starsText = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
-      } else {
-        starsText = '🔒';
+      if (!chapters[level.chapter]) {
+        chapters[level.chapter] = [];
       }
-
-      btn.innerHTML = `
-        <span class="level-num">${level.id}</span>
-        <span class="level-stars-bar">${starsText}</span>
-      `;
-
-      if (isUnlocked) {
-        btn.addEventListener('click', () => {
-          sound.playPickup();
-          this.closeAdventureMap();
-          if (this.currentGameMode !== 'adventure') {
-            this.switchGameMode('adventure');
-          }
-          this.loadAdventureLevel(level.id);
-        });
-      }
-
-      this.adventureLevelsGrid.appendChild(btn);
+      chapters[level.chapter].push(level);
     });
+
+    const chapterIcons: { [key: string]: string } = {
+      'Mystic Forest': '🌲',
+      'Crystal Cavern': '💎',
+      'Cosmic Sanctuary': '🌌',
+    };
+
+    let chapterIndex = 0;
+    for (const [chapterName, levels] of Object.entries(chapters)) {
+      chapterIndex++;
+      let chapterStars = 0;
+      levels.forEach((l) => {
+        chapterStars += getLevelStars(l.id);
+      });
+      totalStars += chapterStars;
+
+      const groupEl = document.createElement('div');
+      groupEl.className = 'chapter-group';
+
+      const headerEl = document.createElement('div');
+      headerEl.className = 'chapter-header';
+      const icon = chapterIcons[chapterName] || '🗺️';
+      headerEl.innerHTML = `
+        <span class="chapter-title">${icon} Ch.${chapterIndex}: ${chapterName}</span>
+        <span class="chapter-stars-pill">⭐ ${chapterStars} / ${levels.length * 3}</span>
+      `;
+      groupEl.appendChild(headerEl);
+
+      const gridEl = document.createElement('div');
+      gridEl.className = 'chapter-levels-grid';
+
+      levels.forEach((level) => {
+        const stars = getLevelStars(level.id);
+        const isUnlocked = level.id <= unlocked;
+        const isCurrent = level.id === this.currentAdventureLevelId;
+
+        const btn = document.createElement('button');
+        btn.className = `level-node-btn ${isUnlocked ? 'unlocked' : 'locked'} ${isCurrent ? 'current' : ''}`;
+        btn.title = `${level.chapter} - ${level.name}`;
+
+        let starsText = '';
+        if (isUnlocked) {
+          starsText = '⭐'.repeat(stars) + '☆'.repeat(3 - stars);
+        } else {
+          starsText = '🔒';
+        }
+
+        btn.innerHTML = `
+          <span class="level-num">${level.id}</span>
+          <span class="level-stars-bar">${starsText}</span>
+        `;
+
+        if (isUnlocked) {
+          btn.addEventListener('click', () => {
+            sound.playPickup();
+            this.closeAdventureMap();
+            if (this.currentGameMode !== 'adventure') {
+              this.switchGameMode('adventure');
+            }
+            this.loadAdventureLevel(level.id);
+          });
+        }
+
+        gridEl.appendChild(btn);
+      });
+
+      groupEl.appendChild(gridEl);
+      this.adventureLevelsGrid.appendChild(groupEl);
+    }
 
     this.mapTotalStars.textContent = `${totalStars} / ${ADVENTURE_LEVELS.length * 3}`;
   }
