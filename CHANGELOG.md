@@ -8,6 +8,8 @@ Yeh document **Box Blast 2D** ke saare changes ka complete audit trail hai — j
 
 | Date & Time (IST) | Author (Kisne Kiya) | Commit / Ref | Key Changes (Kya Change Hua) |
 |---|---|:---:|---|
+| **2026-09-24 02:48 PM** | Manoj / Antigravity | `8a7b057` | Release 6 (v1.0.2+6) build, signed .aab generation (45.9 MB), Google Play Console internal testing release upload & verification. |
+| **2026-09-23 11:23 PM** | Manoj `<nextsem.academy@gmail.com>` | `6906ca6` / `d291b4d` | 9×9 board upgrade, lag & animation performance fixes, Play Store store listing assets, offline service worker & git auto-sync rules. |
 | **2026-09-22 10:06 PM** | Manoj / Antigravity | `Local (Uncommitted)` | `changelog.html` delete kiya; `CHANGELOG.md` mein exact timestamp aur author details add kiye. |
 | **2026-09-22 06:50 PM** | Manoj / Antigravity | `Local (Uncommitted)` | Screen se Desktop Keyboard Hint pill (`Controls: 1 2 3 Pieces...`) poori tarah remove ki. |
 | **2026-09-22 06:43 PM** | Manoj / Antigravity | `Local (Uncommitted)` | HUD header mein Gear ⚙️ & Stats 📊 button add kiye; 4 Dynamic Board Themes (Cosmic, Wood, Neon, Dark) aur Mini Stats preview jode. |
@@ -26,8 +28,39 @@ Yeh document **Box Blast 2D** ke saare changes ka complete audit trail hai — j
 
 ## 📌 Detailed Entry-by-Entry Audit
 
+### Entry 15 — 2026-09-24 @ 02:48 PM IST
+* **Author (Kisne Kiya):** Manoj (Pair Programming with Antigravity AI)
+* **Status:** Committed (`8a7b057`) & Live on Google Play Console (Internal Testing Track)
+* **Files Modified/Created:**
+  - `[MODIFY]` [`mobile/pubspec.yaml`](file:///c:/Users/nextsem/Documents/box-blast-2d/mobile/pubspec.yaml)
+  - `[MODIFY]` `mobile/assets/web/*` (Clean synced Vite build)
+  - `[NEW]` [`chat-logs/Box Blast 2D - Build Release AAB v6 and Play Console Deployment.md`](file:///c:/Users/nextsem/Documents/box-blast-2d/chat-logs/Box%20Blast%202D%20-%20Build%20Release%20AAB%20v6%20and%20Play%20Console%20Deployment.md)
+* **Detailed Changes (Kya Kiya):**
+  1. Google Play Console active release (Release 5) ko supersede karne ke liye version code `6` aur version name `1.0.2` set kiya (`version: 1.0.2+6`).
+  2. Vite production bundle (`npm run build`) generate karke `mobile/assets/web/` mein sync kiya; legacy bundle files clean kiye.
+  3. `flutter build appbundle --release` execute karke 45.9 MB signed `.aab` file compile ki (`nextsem-release-key.jks`, targetSdk 36).
+  4. Google Play Console internal testing track par upload verify kiya: **Release 6 (1.0.2) is now ACTIVE and available to testers**.
+
+---
+
+### Entry 14 — 2026-09-23 @ 11:23 PM IST
+* **Author (Kisne Kiya):** Manoj `<nextsem.academy@gmail.com>`
+* **Status:** Committed (`6906ca6`, `d291b4d`)
+* **Files Modified/Created:**
+  - `[MODIFY]` Grid system, UI, particle engines, styling (`src/*`, `index.html`)
+  - `[NEW]` Play Store marketing assets (`mobile/assets/store/*`, `mobile/STORE_LISTING.md`, `mobile/privacy_policy.html`)
+  - `[NEW]` Rules (`.agents/rules/git-auto-sync.md`, `.agents/rules/smooth-gameplay-and-ui.md`)
+* **Detailed Changes (Kya Kiya):**
+  1. Classic & Adventure mode ke liye board grid ko 9×9 mein upgrade kiya with dynamic responsive scaling.
+  2. Particle rendering aur drag-drop latency optimize kiye for 60/120fps smooth performance.
+  3. Play Store listing ke liye app icons, feature graphics, aur screenshots bundle kiye.
+  4. Git cadence auto-sync continuous integration rules add kiye.
+
+---
+
 ### Entry 13 — 2026-09-22 @ 10:06 PM IST
 * **Author (Kisne Kiya):** Manoj (Pair Programming with Antigravity AI)
+
 * **Status:** Local (Uncommitted)
 * **Files Modified/Deleted:**
   - `[DELETE]` [`changelog.html`](file:///c:/Users/nextsem/Documents/box-blast-2d/changelog.html)
