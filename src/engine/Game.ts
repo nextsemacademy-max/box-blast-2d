@@ -1,6 +1,6 @@
 import { BOARD_SIZE, GridEngine } from './Grid';
 import { generateSmartHand } from './Shapes';
-import { DragState, ShapeDefinition } from './types';
+import { DragState, ShapeDefinition, ObstacleType } from './types';
 import { sound } from './SoundFX';
 import { ParticleEngine } from './Particles';
 import {
@@ -1080,25 +1080,7 @@ export class BlockBlastGame {
 
       // Track Adventure Mode Objective Progress
       if (this.currentGameMode === 'adventure') {
-        const level = ADVENTURE_LEVELS.find((l) => l.id === this.currentAdventureLevelId);
-        if (level) {
-          if (level.objectiveType === 'clear_lines') {
-            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + result.totalLines);
-          } else if (level.objectiveType === 'target_score') {
-            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.score);
-          } else if (level.objectiveType === 'melt_ice' && result.clearedObstacles) {
-            const iceMelted = result.clearedObstacles.filter((o) => o.type === 'ice').length;
-            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + iceMelted);
-          } else if (level.objectiveType === 'collect_relics' && result.clearedObstacles) {
-            const relicsCollected = result.clearedObstacles.filter((o) => o.type === 'relic').length;
-            this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + relicsCollected);
-          }
-          this.updateAdventureHUD(level);
-
-          if (this.adventureGoalCurrent >= this.adventureGoalTarget && !this.isAdventureWon) {
-            this.triggerAdventureVictory(level);
-          }
-        }
+        this.checkAdventureProgress(result.clearedObstacles, result.totalLines);
       }
 
       // Trigger Staggered Line Clears & Jewel Debris
@@ -1274,6 +1256,11 @@ export class BlockBlastGame {
     const newMilestone = Math.floor(this.score / 1000);
     if (newMilestone > prevMilestone && newMilestone > 0) {
       this.triggerMilestoneEvolution(newMilestone);
+    }
+
+    // Check Adventure Mode progress if target_score
+    if (this.currentGameMode === 'adventure') {
+      this.checkAdventureProgress();
     }
 
     if (this.score > this.bestScore) {
@@ -2127,6 +2114,31 @@ export class BlockBlastGame {
     this.adventureMovesChip.classList.toggle('low-moves', this.adventureMovesRemaining <= 3);
   }
 
+  private checkAdventureProgress(clearedObstacles?: { type: ObstacleType }[], clearedLinesCount: number = 0): void {
+    if (this.currentGameMode !== 'adventure' || this.isAdventureWon) return;
+
+    const level = ADVENTURE_LEVELS.find((l) => l.id === this.currentAdventureLevelId);
+    if (!level) return;
+
+    if (level.objectiveType === 'clear_lines' && clearedLinesCount > 0) {
+      this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + clearedLinesCount);
+    } else if (level.objectiveType === 'target_score') {
+      this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.score);
+    } else if (level.objectiveType === 'melt_ice' && clearedObstacles && clearedObstacles.length > 0) {
+      const iceMelted = clearedObstacles.filter((o) => o.type === 'ice').length;
+      this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + iceMelted);
+    } else if (level.objectiveType === 'collect_relics' && clearedObstacles && clearedObstacles.length > 0) {
+      const relicsCollected = clearedObstacles.filter((o) => o.type === 'relic').length;
+      this.adventureGoalCurrent = Math.min(this.adventureGoalTarget, this.adventureGoalCurrent + relicsCollected);
+    }
+
+    this.updateAdventureHUD(level);
+
+    if (this.adventureGoalCurrent >= this.adventureGoalTarget && !this.isAdventureWon) {
+      this.triggerAdventureVictory(level);
+    }
+  }
+
   private triggerAdventureVictory(level: AdventureLevel): void {
     this.isAdventureWon = true;
     sound.playMegaComboFanfare();
@@ -2393,6 +2405,12 @@ export class BlockBlastGame {
       this.triggerVibrate(35);
       this.addScore(25);
 
+      // Track adventure mode progress if an obstacle (ice/relic) was smashed
+      if (cleared.obstacle) {
+        this.checkAdventureProgress([{ type: cleared.obstacle }], 0);
+      }
+
+      this.renderBoard();
       this.hammerCount = Math.max(0, this.hammerCount - 1);
       this.saveBoosterCounts();
       this.cancelBooster();
@@ -2451,6 +2469,13 @@ export class BlockBlastGame {
     const pts = Math.max(100, cleared.length * 25);
     this.addScore(pts);
 
+    // Track adventure progress for obstacles destroyed & lines blasted by rocket
+    const clearedObstacles = cleared
+      .filter((c) => c.obstacle !== null)
+      .map((c) => ({ type: c.obstacle! }));
+    this.checkAdventureProgress(clearedObstacles, 2);
+
+    this.renderBoard();
     this.rocketCount = Math.max(0, this.rocketCount - 1);
     this.saveBoosterCounts();
     this.cancelBooster();

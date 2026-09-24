@@ -294,12 +294,13 @@ export class GridEngine {
   /**
    * Hammer Booster: Clears a single target cell
    */
-  public clearSingleCell(r: number, c: number): { r: number; c: number; color: ColorTheme | null } | null {
+  public clearSingleCell(r: number, c: number): { r: number; c: number; color: ColorTheme | null; obstacle: ObstacleType | null } | null {
     if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
       if (this.board[r][c].filled) {
         const color = this.board[r][c].color;
+        const obstacle = this.board[r][c].obstacle || null;
         this.board[r][c] = { filled: false, color: null, obstacle: null };
-        return { r, c, color };
+        return { r, c, color, obstacle };
       }
     }
     return null;
@@ -308,15 +309,20 @@ export class GridEngine {
   /**
    * Rocket Booster: Clears all filled cells in row `r` and column `c` (Supersonic Cross Blast)
    */
-  public clearCrossRocket(targetR: number, targetC: number): { r: number; c: number; color: ColorTheme | null }[] {
-    const cleared: { r: number; c: number; color: ColorTheme | null }[] = [];
+  public clearCrossRocket(targetR: number, targetC: number): { r: number; c: number; color: ColorTheme | null; obstacle: ObstacleType | null }[] {
+    const cleared: { r: number; c: number; color: ColorTheme | null; obstacle: ObstacleType | null }[] = [];
     const clearedCoords = new Set<string>();
 
     // Clear entire row
     for (let c = 0; c < BOARD_SIZE; c++) {
       if (this.board[targetR][c].filled) {
         clearedCoords.add(`${targetR},${c}`);
-        cleared.push({ r: targetR, c, color: this.board[targetR][c].color });
+        cleared.push({
+          r: targetR,
+          c,
+          color: this.board[targetR][c].color,
+          obstacle: this.board[targetR][c].obstacle || null,
+        });
         this.board[targetR][c] = { filled: false, color: null, obstacle: null };
       }
     }
@@ -326,7 +332,12 @@ export class GridEngine {
       const key = `${r},${targetC}`;
       if (this.board[r][targetC].filled && !clearedCoords.has(key)) {
         clearedCoords.add(key);
-        cleared.push({ r, c: targetC, color: this.board[r][targetC].color });
+        cleared.push({
+          r,
+          c: targetC,
+          color: this.board[r][targetC].color,
+          obstacle: this.board[r][targetC].obstacle || null,
+        });
         this.board[r][targetC] = { filled: false, color: null, obstacle: null };
       }
     }
