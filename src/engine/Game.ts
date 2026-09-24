@@ -53,6 +53,21 @@ export class BlockBlastGame {
   private hapticEnabled: boolean = true;
   private hasRevivedThisRun: boolean = false;
 
+  // Boosters State & DOM Elements
+  private boosterHammerBtn: HTMLElement;
+  private boosterRocketBtn: HTMLElement;
+  private boosterRerollBtn: HTMLElement;
+  private boosterHammerBadge: HTMLElement;
+  private boosterRocketBadge: HTMLElement;
+  private boosterRerollBadge: HTMLElement;
+  private boosterHintBar: HTMLElement;
+  private boosterHintText: HTMLElement;
+  private hammerCount: number = 3;
+  private rocketCount: number = 3;
+  private rerollCount: number = 3;
+  private activeBooster: 'hammer' | 'rocket' | null = null;
+  private currentRocketAimCells: { r: number; c: number }[] = [];
+
   // Career Statistics & Celebration DOM Elements
   private statsModal: HTMLElement;
   private pauseStatsBtn: HTMLElement;
@@ -195,6 +210,16 @@ export class BlockBlastGame {
     this.modalReviveBtn = document.getElementById('modal-revive-btn')!;
     this.closeTutorialBtn = document.getElementById('close-tutorial-btn')!;
 
+    // Boosters DOM Elements
+    this.boosterHammerBtn = document.getElementById('booster-hammer-btn')!;
+    this.boosterRocketBtn = document.getElementById('booster-rocket-btn')!;
+    this.boosterRerollBtn = document.getElementById('booster-reroll-btn')!;
+    this.boosterHammerBadge = document.getElementById('booster-hammer-badge')!;
+    this.boosterRocketBadge = document.getElementById('booster-rocket-badge')!;
+    this.boosterRerollBadge = document.getElementById('booster-reroll-badge')!;
+    this.boosterHintBar = document.getElementById('booster-hint-bar')!;
+    this.boosterHintText = document.getElementById('booster-hint-text')!;
+
     // Career Stats & Celebration Elements
     this.statsModal = document.getElementById('stats-modal')!;
     this.closeStatsBtn = document.getElementById('close-stats-btn')!;
@@ -290,12 +315,17 @@ export class BlockBlastGame {
 
     const savedTheme = localStorage.getItem('box_blast_theme') || 'theme-cosmic';
     this.applyTheme(savedTheme);
+
+    this.loadBoosterCounts();
   }
 
   public applyTheme(theme: string): void {
     this.currentTheme = theme;
     localStorage.setItem('box_blast_theme', theme);
-    this.gameWrapperEl.classList.remove('theme-cosmic', 'theme-wood', 'theme-neon', 'theme-dark');
+    this.gameWrapperEl.classList.remove(
+      'theme-cosmic', 'theme-wood', 'theme-neon', 'theme-dark',
+      'theme-emerald', 'theme-amber', 'theme-amethyst', 'theme-ruby', 'theme-prism'
+    );
     this.gameWrapperEl.classList.add(theme);
 
     const activePill = document.getElementById('active-theme-name');
@@ -305,6 +335,11 @@ export class BlockBlastGame {
         'theme-wood': 'Wood',
         'theme-neon': 'Neon',
         'theme-dark': 'Dark',
+        'theme-emerald': 'Emerald',
+        'theme-amber': 'Amber',
+        'theme-amethyst': 'Amethyst',
+        'theme-ruby': 'Ruby',
+        'theme-prism': 'Prism',
       };
       activePill.textContent = names[theme] || 'Custom';
     }
@@ -1230,8 +1265,16 @@ export class BlockBlastGame {
 
   // 8. Rolling Score Counter & Streak UI
   private addScore(amount: number): void {
+    const oldScore = this.score;
     this.score += amount;
     this.animateScoreRolling();
+
+    // Check for 1000-point board color evolution
+    const prevMilestone = Math.floor(oldScore / 1000);
+    const newMilestone = Math.floor(this.score / 1000);
+    if (newMilestone > prevMilestone && newMilestone > 0) {
+      this.triggerMilestoneEvolution(newMilestone);
+    }
 
     if (this.score > this.bestScore) {
       const wasExistingRecord = this.bestScore > 0;
@@ -1514,6 +1557,25 @@ export class BlockBlastGame {
   }
 
   private onCellHover(r: number, c: number): void {
+    if (this.activeBooster === 'rocket') {
+      this.clearRocketAim();
+      for (let c_idx = 0; c_idx < BOARD_SIZE; c_idx++) {
+        const el = this.getCellElement(r, c_idx);
+        if (el) {
+          el.classList.add('rocket-aim-cross');
+          this.currentRocketAimCells.push({ r, c: c_idx });
+        }
+      }
+      for (let r_idx = 0; r_idx < BOARD_SIZE; r_idx++) {
+        const el = this.getCellElement(r_idx, c);
+        if (el) {
+          el.classList.add('rocket-aim-cross');
+          this.currentRocketAimCells.push({ r: r_idx, c });
+        }
+      }
+      return;
+    }
+
     if (this.selectedSlotIndex === null || this.dragState !== null) return;
     const shape = this.hand[this.selectedSlotIndex];
     if (!shape) return;
@@ -1564,6 +1626,15 @@ export class BlockBlastGame {
   }
 
   private onCellClicked(r: number, c: number): void {
+    if (this.activeBooster === 'hammer') {
+      this.executeHammerBooster(r, c);
+      return;
+    }
+    if (this.activeBooster === 'rocket') {
+      this.executeRocketBooster(r, c);
+      return;
+    }
+
     if (this.selectedSlotIndex === null) return;
     const shape = this.hand[this.selectedSlotIndex];
     if (!shape) {
@@ -1746,6 +1817,30 @@ export class BlockBlastGame {
     this.closeTutorialBtn.addEventListener('click', () => {
       sound.playPickup();
       this.tutorialModal.classList.add('hidden');
+    });
+
+    // Boosters Button Events
+    this.boosterHammerBtn.addEventListener('click', () => {
+      sound.unlock();
+      this.toggleBooster('hammer');
+    });
+
+    this.boosterRocketBtn.addEventListener('click', () => {
+      sound.unlock();
+      this.toggleBooster('rocket');
+    });
+
+    this.boosterRerollBtn.addEventListener('click', () => {
+      sound.unlock();
+      this.useRerollBooster();
+    });
+
+    this.boosterHintBar.addEventListener('click', () => {
+      this.cancelBooster();
+    });
+
+    this.boardElement.addEventListener('pointerleave', () => {
+      this.clearRocketAim();
     });
 
     // Restart Buttons with Double-Tap Safety
@@ -2171,6 +2266,269 @@ export class BlockBlastGame {
     }
 
     this.mapTotalStars.textContent = `${totalStars} / ${ADVENTURE_LEVELS.length * 3}`;
+  }
+
+  // =========================================================================
+  // 12. Boosters Engine (Hammer, Rocket, Reroll) & Milestone Evolution
+  // =========================================================================
+
+  private loadBoosterCounts(): void {
+    const savedHammer = localStorage.getItem('box_blast_hammer_count');
+    const savedRocket = localStorage.getItem('box_blast_rocket_count');
+    const savedReroll = localStorage.getItem('box_blast_reroll_count');
+
+    this.hammerCount = savedHammer !== null ? Math.max(0, parseInt(savedHammer, 10)) : 3;
+    this.rocketCount = savedRocket !== null ? Math.max(0, parseInt(savedRocket, 10)) : 3;
+    this.rerollCount = savedReroll !== null ? Math.max(0, parseInt(savedReroll, 10)) : 3;
+
+    if (isNaN(this.hammerCount)) this.hammerCount = 3;
+    if (isNaN(this.rocketCount)) this.rocketCount = 3;
+    if (isNaN(this.rerollCount)) this.rerollCount = 3;
+
+    this.updateBoosterUI();
+  }
+
+  private saveBoosterCounts(): void {
+    localStorage.setItem('box_blast_hammer_count', String(this.hammerCount));
+    localStorage.setItem('box_blast_rocket_count', String(this.rocketCount));
+    localStorage.setItem('box_blast_reroll_count', String(this.rerollCount));
+    this.updateBoosterUI();
+  }
+
+  private updateBoosterUI(): void {
+    if (!this.boosterHammerBadge || !this.boosterRocketBadge || !this.boosterRerollBadge) return;
+
+    this.boosterHammerBadge.textContent = String(this.hammerCount);
+    this.boosterRocketBadge.textContent = String(this.rocketCount);
+    this.boosterRerollBadge.textContent = String(this.rerollCount);
+
+    this.boosterHammerBadge.classList.toggle('empty', this.hammerCount === 0);
+    this.boosterRocketBadge.classList.toggle('empty', this.rocketCount === 0);
+    this.boosterRerollBadge.classList.toggle('empty', this.rerollCount === 0);
+
+    this.boosterHammerBtn.classList.toggle('active-booster', this.activeBooster === 'hammer');
+    this.boosterRocketBtn.classList.toggle('active-booster', this.activeBooster === 'rocket');
+  }
+
+  private toggleBooster(type: 'hammer' | 'rocket'): void {
+    const count = type === 'hammer' ? this.hammerCount : this.rocketCount;
+    if (count <= 0) {
+      sound.playSnapback();
+      this.triggerVibrate(20);
+      this.showToast(`No ${type}s left! Reach next 1,000 pts for free bonus! 🎁`);
+      return;
+    }
+
+    if (this.activeBooster === type) {
+      this.cancelBooster();
+      sound.playPickup();
+      return;
+    }
+
+    // Activate selected booster
+    this.deselectSlot();
+    this.clearGhostCells();
+    this.clearPredictiveCells();
+    this.clearRocketAim();
+
+    this.activeBooster = type;
+    this.boardElement.classList.remove('targeting-hammer', 'targeting-rocket');
+    this.boardElement.classList.add(`targeting-${type}`);
+
+    this.boosterHintBar.classList.remove('hidden');
+    if (type === 'hammer') {
+      this.boosterHintText.textContent = '🔨 Tap any block to smash • Tap booster to cancel';
+    } else {
+      this.boosterHintText.textContent = '🚀 Tap any cell to blast Row & Col • Tap booster to cancel';
+    }
+
+    sound.playPickup();
+    this.triggerVibrate(15);
+    this.updateBoosterUI();
+  }
+
+  private cancelBooster(): void {
+    this.activeBooster = null;
+    this.boardElement.classList.remove('targeting-hammer', 'targeting-rocket');
+    this.boosterHintBar.classList.add('hidden');
+    this.clearRocketAim();
+    this.updateBoosterUI();
+  }
+
+  private clearRocketAim(): void {
+    if (this.currentRocketAimCells.length > 0) {
+      this.currentRocketAimCells.forEach(({ r, c }) => {
+        const el = this.getCellElement(r, c);
+        if (el) el.classList.remove('rocket-aim-cross');
+      });
+      this.currentRocketAimCells = [];
+    }
+  }
+
+  private executeHammerBooster(r: number, c: number): void {
+    if (!this.grid.board[r]?.[c]?.filled) {
+      sound.playSnapback();
+      this.triggerVibrate(25);
+      this.showToast('Tap a filled block to smash! 🔨');
+      return;
+    }
+
+    const cleared = this.grid.clearSingleCell(r, c);
+    if (cleared) {
+      const cellEl = this.getCellElement(r, c);
+      if (cellEl) {
+        const x = this.cachedBoardOffsetX + (c + 0.5) * (this.cachedCellWidth || 38);
+        const y = this.cachedBoardOffsetY + (r + 0.5) * (this.cachedCellHeight || 38);
+        this.particles.spawnBurst(x, y, '#f59e0b', 14);
+        cellEl.className = 'grid-cell placed-pop';
+        setTimeout(() => {
+          if (cellEl) cellEl.className = 'grid-cell';
+        }, 220);
+      }
+
+      this.boardElement.classList.add('board-shake-light');
+      setTimeout(() => this.boardElement.classList.remove('board-shake-light'), 220);
+
+      sound.playHammerSmash();
+      this.triggerVibrate(35);
+      this.addScore(25);
+
+      this.hammerCount = Math.max(0, this.hammerCount - 1);
+      this.saveBoosterCounts();
+      this.cancelBooster();
+      this.checkPlayability();
+      this.showToast('Block Smashed! 🔨 (+25 PTS)');
+    }
+  }
+
+  private executeRocketBooster(targetR: number, targetC: number): void {
+    const cleared = this.grid.clearCrossRocket(targetR, targetC);
+
+    // Launch supersonic visual rocket sprites
+    const targetCell = this.getCellElement(targetR, targetC);
+    if (targetCell) {
+      const rowY = targetCell.offsetTop + targetCell.offsetHeight / 2;
+      const missileH = document.createElement('div');
+      missileH.className = 'rocket-missile-h';
+      missileH.textContent = '🚀';
+      missileH.style.top = `${rowY}px`;
+      this.boardElement.appendChild(missileH);
+      setTimeout(() => {
+        if (missileH.parentElement) missileH.parentElement.removeChild(missileH);
+      }, 420);
+
+      const colX = targetCell.offsetLeft + targetCell.offsetWidth / 2;
+      const missileV = document.createElement('div');
+      missileV.className = 'rocket-missile-v';
+      missileV.textContent = '🚀';
+      missileV.style.left = `${colX}px`;
+      this.boardElement.appendChild(missileV);
+      setTimeout(() => {
+        if (missileV.parentElement) missileV.parentElement.removeChild(missileV);
+      }, 420);
+    }
+
+    this.boardElement.classList.add('board-shake-heavy');
+    setTimeout(() => this.boardElement.classList.remove('board-shake-heavy'), 320);
+
+    sound.playRocketLaunch();
+    this.triggerVibrate([40, 30, 60]);
+
+    // Animate clears
+    cleared.forEach(({ r, c }) => {
+      const cellEl = this.getCellElement(r, c);
+      if (cellEl) {
+        const x = this.cachedBoardOffsetX + (c + 0.5) * (this.cachedCellWidth || 38);
+        const y = this.cachedBoardOffsetY + (r + 0.5) * (this.cachedCellHeight || 38);
+        this.particles.spawnBurst(x, y, '#38bdf8', 8);
+        cellEl.className = 'grid-cell clearing';
+        setTimeout(() => {
+          if (cellEl) cellEl.className = 'grid-cell';
+        }, 220);
+      }
+    });
+
+    const pts = Math.max(100, cleared.length * 25);
+    this.addScore(pts);
+
+    this.rocketCount = Math.max(0, this.rocketCount - 1);
+    this.saveBoosterCounts();
+    this.cancelBooster();
+    this.checkPlayability();
+    this.showToast(`Supersonic Rocket Blast! 🚀 (+${pts} PTS)`);
+  }
+
+  private useRerollBooster(): void {
+    if (this.rerollCount <= 0) {
+      sound.playSnapback();
+      this.triggerVibrate(20);
+      this.showToast('No Rerolls left! Reach next 1,000 pts for free bonus! 🎁');
+      return;
+    }
+
+    if (this.hand.every((s) => s === null)) {
+      this.showToast('Hand is already empty!');
+      return;
+    }
+
+    sound.playReroll();
+    this.triggerVibrate([20, 20, 20]);
+
+    for (let i = 0; i < 3; i++) {
+      const slot = document.getElementById(`slot-${i}`);
+      if (slot) {
+        slot.classList.add('reroll-spin');
+        setTimeout(() => slot.classList.remove('reroll-spin'), 400);
+      }
+    }
+
+    this.hand = generateSmartHand(this.grid);
+    this.renderHand(false);
+
+    this.rerollCount = Math.max(0, this.rerollCount - 1);
+    this.saveBoosterCounts();
+    this.cancelBooster();
+    this.checkPlayability();
+    this.showToast('Hand Refreshed! 🔄');
+  }
+
+  // 13. Dynamic Board Color Evolution Every 1,000 Points
+  private triggerMilestoneEvolution(milestone: number): void {
+    const MILESTONE_THEMES = [
+      { id: 'theme-emerald', name: 'Emerald Sanctuary', accent: '#10b981' },
+      { id: 'theme-amber', name: 'Solar Gold', accent: '#f59e0b' },
+      { id: 'theme-amethyst', name: 'Royal Amethyst', accent: '#a855f7' },
+      { id: 'theme-neon', name: 'Cyber Neon', accent: '#06b6d4' },
+      { id: 'theme-ruby', name: 'Crimson Inferno', accent: '#ef4444' },
+      { id: 'theme-prism', name: 'Mythic Prism', accent: '#38bdf8' },
+    ];
+
+    const themeObj = MILESTONE_THEMES[(milestone - 1) % MILESTONE_THEMES.length];
+    this.applyTheme(themeObj.id);
+
+    // Reward +1 of every booster!
+    this.hammerCount += 1;
+    this.rocketCount += 1;
+    this.rerollCount += 1;
+    this.saveBoosterCounts();
+
+    sound.playMilestoneFanfare();
+    this.triggerVibrate([40, 30, 60, 30, 100]);
+    this.particles.spawnHypeCannons(80);
+
+    // Floating celebratory milestone banner
+    const banner = document.createElement('div');
+    banner.className = 'milestone-banner';
+    banner.innerHTML = `
+      <span class="milestone-title">🎉 ${(milestone * 1000).toLocaleString()} PTS! ${themeObj.name.toUpperCase()}</span>
+      <span class="milestone-sub">+1 Hammer • +1 Rocket • +1 Reroll Free!</span>
+    `;
+    this.floatingTextContainer.appendChild(banner);
+    setTimeout(() => {
+      if (banner.parentElement) banner.parentElement.removeChild(banner);
+    }, 2400);
+
+    this.showToast(`✨ ${(milestone * 1000).toLocaleString()} PTS! Board Evolved: ${themeObj.name}`);
   }
 
   private getCellElement(r: number, c: number): HTMLElement | null {

@@ -325,6 +325,137 @@ class SoundFXEngine {
     osc.stop(now + 0.46);
   }
 
+  // Hammer Smash Impact (Heavy mechanical thud + crystal shatter)
+  public playHammerSmash() {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+
+    // Heavy bass impact
+    const subOsc = this.ctx.createOscillator();
+    const subGain = this.ctx.createGain();
+    subOsc.type = 'sine';
+    subOsc.frequency.setValueAtTime(180, now);
+    subOsc.frequency.exponentialRampToValueAtTime(35, now + 0.16);
+    subGain.gain.setValueAtTime(0.45, now);
+    subGain.gain.exponentialRampToValueAtTime(0.01, now + 0.16);
+    subOsc.connect(subGain);
+    subGain.connect(this.ctx.destination);
+    subOsc.start(now);
+    subOsc.stop(now + 0.17);
+
+    // Marble crack transient
+    const crackOsc = this.ctx.createOscillator();
+    const crackGain = this.ctx.createGain();
+    crackOsc.type = 'triangle';
+    crackOsc.frequency.setValueAtTime(980, now);
+    crackOsc.frequency.exponentialRampToValueAtTime(220, now + 0.08);
+    crackGain.gain.setValueAtTime(0.28, now);
+    crackGain.gain.exponentialRampToValueAtTime(0.01, now + 0.08);
+    crackOsc.connect(crackGain);
+    crackGain.connect(this.ctx.destination);
+    crackOsc.start(now);
+    crackOsc.stop(now + 0.09);
+  }
+
+  // Supersonic Rocket Swoosh & Blast
+  public playRocketLaunch() {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const now = this.ctx.currentTime;
+
+    // Rocket acceleration whoosh
+    const whooshOsc = this.ctx.createOscillator();
+    const whooshGain = this.ctx.createGain();
+    whooshOsc.type = 'sawtooth';
+    whooshOsc.frequency.setValueAtTime(150, now);
+    whooshOsc.frequency.exponentialRampToValueAtTime(880, now + 0.22);
+    whooshGain.gain.setValueAtTime(0.02, now);
+    whooshGain.gain.linearRampToValueAtTime(0.32, now + 0.15);
+    whooshGain.gain.exponentialRampToValueAtTime(0.01, now + 0.28);
+    whooshOsc.connect(whooshGain);
+    whooshGain.connect(this.ctx.destination);
+    whooshOsc.start(now);
+    whooshOsc.stop(now + 0.3);
+
+    // Boom trail
+    const boomOsc = this.ctx.createOscillator();
+    const boomGain = this.ctx.createGain();
+    boomOsc.type = 'sine';
+    boomOsc.frequency.setValueAtTime(120, now + 0.12);
+    boomOsc.frequency.exponentialRampToValueAtTime(30, now + 0.35);
+    boomGain.gain.setValueAtTime(0.38, now + 0.12);
+    boomGain.gain.exponentialRampToValueAtTime(0.01, now + 0.35);
+    boomOsc.connect(boomGain);
+    boomGain.connect(this.ctx.destination);
+    boomOsc.start(now + 0.12);
+    boomOsc.stop(now + 0.36);
+  }
+
+  // Reroll / Shuffle Harmonic Cascade
+  public playReroll() {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    const notes = [440, 554.37, 659.25, 880];
+    notes.forEach((freq, idx) => {
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      const start = this.ctx.currentTime + idx * 0.04;
+
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(freq, start);
+      gain.gain.setValueAtTime(0.2, start);
+      gain.gain.exponentialRampToValueAtTime(0.01, start + 0.16);
+
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start(start);
+      osc.stop(start + 0.18);
+    });
+  }
+
+  // 1000-Point Milestone Victory Fanfare
+  public playMilestoneFanfare() {
+    if (!this.enabled) return;
+    this.initContext();
+    if (!this.ctx) return;
+
+    // Major triumphal chord progression
+    const chord1 = [523.25, 659.25, 783.99]; // C Major
+    const chord2 = [587.33, 739.99, 880.00]; // D Major
+    const chord3 = [659.25, 830.61, 987.77, 1318.51]; // E Major High
+
+    const playChord = (freqs: number[], timeOffset: number, duration: number) => {
+      freqs.forEach((freq) => {
+        if (!this.ctx) return;
+        const osc = this.ctx.createOscillator();
+        const gain = this.ctx.createGain();
+        const start = this.ctx.currentTime + timeOffset;
+
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(freq, start);
+        gain.gain.setValueAtTime(0.16 / freqs.length, start);
+        gain.gain.exponentialRampToValueAtTime(0.005, start + duration);
+
+        osc.connect(gain);
+        gain.connect(this.ctx.destination);
+        osc.start(start);
+        osc.stop(start + duration + 0.02);
+      });
+    };
+
+    playChord(chord1, 0.0, 0.18);
+    playChord(chord2, 0.12, 0.18);
+    playChord(chord3, 0.25, 0.55);
+  }
+
   public toggle(): boolean {
     this.enabled = !this.enabled;
     return this.enabled;

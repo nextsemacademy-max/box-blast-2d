@@ -292,6 +292,49 @@ export class GridEngine {
   }
 
   /**
+   * Hammer Booster: Clears a single target cell
+   */
+  public clearSingleCell(r: number, c: number): { r: number; c: number; color: ColorTheme | null } | null {
+    if (r >= 0 && r < BOARD_SIZE && c >= 0 && c < BOARD_SIZE) {
+      if (this.board[r][c].filled) {
+        const color = this.board[r][c].color;
+        this.board[r][c] = { filled: false, color: null, obstacle: null };
+        return { r, c, color };
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Rocket Booster: Clears all filled cells in row `r` and column `c` (Supersonic Cross Blast)
+   */
+  public clearCrossRocket(targetR: number, targetC: number): { r: number; c: number; color: ColorTheme | null }[] {
+    const cleared: { r: number; c: number; color: ColorTheme | null }[] = [];
+    const clearedCoords = new Set<string>();
+
+    // Clear entire row
+    for (let c = 0; c < BOARD_SIZE; c++) {
+      if (this.board[targetR][c].filled) {
+        clearedCoords.add(`${targetR},${c}`);
+        cleared.push({ r: targetR, c, color: this.board[targetR][c].color });
+        this.board[targetR][c] = { filled: false, color: null, obstacle: null };
+      }
+    }
+
+    // Clear entire column
+    for (let r = 0; r < BOARD_SIZE; r++) {
+      const key = `${r},${targetC}`;
+      if (this.board[r][targetC].filled && !clearedCoords.has(key)) {
+        clearedCoords.add(key);
+        cleared.push({ r, c: targetC, color: this.board[r][targetC].color });
+        this.board[r][targetC] = { filled: false, color: null, obstacle: null };
+      }
+    }
+
+    return cleared;
+  }
+
+  /**
    * Counts the total number of currently filled cells on the board
    */
   public countFilledCells(): number {
