@@ -2,6 +2,13 @@
 <html lang="en">
 
 <head>
+  <script>
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.includes('192.168.')) {
+      if (!window.location.pathname.includes('/mobile/assets/web/')) {
+        window.location.replace('./mobile/assets/web/index.html');
+      }
+    }
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
@@ -18,7 +25,7 @@
   <link
     href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;800;900&family=Outfit:wght@400;500;600;700;800;900&display=swap"
     rel="stylesheet">
-  <script type="module" crossorigin src="./assets/index-oHQRWc6D.js"></script>
+  <script type="module" crossorigin src="./assets/index-P_CK9vxV.js"></script>
   <link rel="stylesheet" crossorigin href="./assets/index-lujwR_tY.css">
 </head>
 

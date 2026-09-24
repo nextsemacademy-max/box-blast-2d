@@ -65,6 +65,7 @@ export class BlockBlastGame {
   private hammerCount: number = 3;
   private rocketCount: number = 3;
   private rerollCount: number = 3;
+  private readonly MAX_BOOSTER_COUNT: number = 5;
   private activeBooster: 'hammer' | 'rocket' | null = null;
   private currentRocketAimCells: { r: number; c: number }[] = [];
 
@@ -2296,15 +2297,16 @@ export class BlockBlastGame {
     const savedRocket = localStorage.getItem('box_blast_rocket_count');
     const savedReroll = localStorage.getItem('box_blast_reroll_count');
 
-    this.hammerCount = savedHammer !== null ? Math.max(0, parseInt(savedHammer, 10)) : 3;
-    this.rocketCount = savedRocket !== null ? Math.max(0, parseInt(savedRocket, 10)) : 3;
-    this.rerollCount = savedReroll !== null ? Math.max(0, parseInt(savedReroll, 10)) : 3;
+    this.hammerCount = savedHammer !== null ? Math.min(this.MAX_BOOSTER_COUNT, Math.max(0, parseInt(savedHammer, 10))) : 3;
+    this.rocketCount = savedRocket !== null ? Math.min(this.MAX_BOOSTER_COUNT, Math.max(0, parseInt(savedRocket, 10))) : 3;
+    this.rerollCount = savedReroll !== null ? Math.min(this.MAX_BOOSTER_COUNT, Math.max(0, parseInt(savedReroll, 10))) : 3;
 
     if (isNaN(this.hammerCount)) this.hammerCount = 3;
     if (isNaN(this.rocketCount)) this.rocketCount = 3;
     if (isNaN(this.rerollCount)) this.rerollCount = 3;
 
-    this.updateBoosterUI();
+    // Normalize and persist back to ensure numbers above 5 are permanently clamped
+    this.saveBoosterCounts();
   }
 
   private saveBoosterCounts(): void {
@@ -2538,22 +2540,31 @@ export class BlockBlastGame {
     const themeObj = MILESTONE_THEMES[(milestone - 1) % MILESTONE_THEMES.length];
     this.applyTheme(themeObj.id);
 
-    // Reward +1 of every booster!
-    this.hammerCount += 1;
-    this.rocketCount += 1;
-    this.rerollCount += 1;
+    // Reward +1 of every booster up to MAX_BOOSTER_COUNT (5)!
+    const prevMaxReached =
+      this.hammerCount >= this.MAX_BOOSTER_COUNT &&
+      this.rocketCount >= this.MAX_BOOSTER_COUNT &&
+      this.rerollCount >= this.MAX_BOOSTER_COUNT;
+
+    this.hammerCount = Math.min(this.MAX_BOOSTER_COUNT, this.hammerCount + 1);
+    this.rocketCount = Math.min(this.MAX_BOOSTER_COUNT, this.rocketCount + 1);
+    this.rerollCount = Math.min(this.MAX_BOOSTER_COUNT, this.rerollCount + 1);
     this.saveBoosterCounts();
 
     sound.playMilestoneFanfare();
     this.triggerVibrate([40, 30, 60, 30, 100]);
     this.particles.spawnHypeCannons(80);
 
+    const bannerSub = prevMaxReached
+      ? 'Boosters Full (Max 5/5)!'
+      : '+1 Free Boosters (Max 5)!';
+
     // Floating celebratory milestone banner
     const banner = document.createElement('div');
     banner.className = 'milestone-banner';
     banner.innerHTML = `
       <span class="milestone-title">🎉 ${(milestone * 1000).toLocaleString()} PTS! ${themeObj.name.toUpperCase()}</span>
-      <span class="milestone-sub">+1 Hammer • +1 Rocket • +1 Reroll Free!</span>
+      <span class="milestone-sub">${bannerSub}</span>
     `;
     this.floatingTextContainer.appendChild(banner);
     setTimeout(() => {
