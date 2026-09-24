@@ -1,4 +1,4 @@
-name: Build Box Blast 2D Android .aab
+name: Build Box Blast 2D Android APK & AAB
 
 on:
   push:
@@ -7,7 +7,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-aab:
+  build-android:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
@@ -39,13 +39,25 @@ jobs:
           mkdir -p mobile/assets/web
           cp -r dist/* mobile/assets/web/
 
-      - name: Build Release AAB
+      - name: Build Android APK
         run: |
           cd mobile
+          chmod +x android/gradlew || true
           flutter pub get
           # Fix AGP 8 Proguard deprecation in cached plugins
           find ~/.pub-cache -type f \( -name "*.gradle" -o -name "*.gradle.kts" \) -exec sed -i "s/proguard-android.txt/proguard-android-optimize.txt/g" {} + || true
+          flutter build apk --release -v
+
+      - name: Build Release AAB
+        run: |
+          cd mobile
           flutter build appbundle --release -v
+
+      - name: Upload APK Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: box-blast-2d-apk
+          path: mobile/build/app/outputs/flutter-apk/*.apk
 
       - name: Upload AAB Artifact
         uses: actions/upload-artifact@v4
