@@ -46,12 +46,12 @@ jobs:
           flutter pub get
           # Fix AGP 8 Proguard deprecation in cached plugins
           find ~/.pub-cache -type f \( -name "*.gradle" -o -name "*.gradle.kts" \) -exec sed -i "s/proguard-android.txt/proguard-android-optimize.txt/g" {} + || true
-          flutter build apk --release -v
+          flutter build apk --release --no-tree-shake-icons -v
 
       - name: Build Release AAB
         run: |
           cd mobile
-          flutter build appbundle --release -v
+          flutter build appbundle --release --no-tree-shake-icons -v
 
       - name: Upload APK Artifact
         uses: actions/upload-artifact@v4
