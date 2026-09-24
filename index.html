@@ -2,6 +2,13 @@
 <html lang="en">
 
 <head>
+  <script>
+    if (window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && !window.location.hostname.includes('192.168.')) {
+      if (!window.location.pathname.includes('/mobile/assets/web/')) {
+        window.location.replace('./mobile/assets/web/index.html');
+      }
+    }
+  </script>
   <meta charset="UTF-8" />
   <meta name="viewport"
     content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
