@@ -2212,6 +2212,13 @@ export class BlockBlastGame {
       'Mystic Forest': '🌲',
       'Crystal Cavern': '💎',
       'Cosmic Sanctuary': '🌌',
+      'Volcano Realm': '🌋',
+      'Cyber Neon City': '⚡',
+      'Sunken Atlantis': '🌊',
+      'Golden Olympus': '👑',
+      'Void Abyss': '🪐',
+      "Dragon's Peak": '🐉',
+      'Infinity Nexus': '✨',
     };
 
     let chapterIndex = 0;
