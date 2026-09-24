@@ -44,8 +44,16 @@ jobs:
           cd mobile
           chmod +x android/gradlew || true
           flutter pub get
-          echo "Building Debug APK..."
-          flutter build apk --debug
+          echo "=== RUNNING FLUTTER BUILD APK DEBUG ==="
+          flutter build apk --debug --verbose > build_log.txt 2>&1 || true
+          echo "=== BUILD LOG SUMMARY ==="
+          grep -E -i "error|exception|failure|failed" build_log.txt | head -n 50 || true
+          echo "=== BUILD LOG LAST 60 LINES ==="
+          tail -n 60 build_log.txt
+          if [ ! -f "build/app/outputs/flutter-apk/app-debug.apk" ]; then
+            echo "ERROR: app-debug.apk was not generated!"
+            exit 1
+          fi
           echo "Building Release APK..."
           flutter build apk --release --no-tree-shake-icons
 
@@ -53,6 +61,13 @@ jobs:
         run: |
           cd mobile
           flutter build appbundle --release --no-tree-shake-icons
+
+      - name: Upload Build Log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-log-text
+          path: mobile/build_log.txt
 
       - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
