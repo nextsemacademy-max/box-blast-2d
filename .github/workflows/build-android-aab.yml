@@ -39,24 +39,25 @@ jobs:
           mkdir -p mobile/assets/web
           cp -r dist/* mobile/assets/web/
 
-      - name: Build Android APK
+      - name: Build Android APKs
         run: |
           cd mobile
           chmod +x android/gradlew || true
           flutter pub get
-          # Fix AGP 8 Proguard deprecation in cached plugins
-          find ~/.pub-cache -type f \( -name "*.gradle" -o -name "*.gradle.kts" \) -exec sed -i "s/proguard-android.txt/proguard-android-optimize.txt/g" {} + || true
-          flutter build apk --release --no-tree-shake-icons -v
+          echo "Building Debug APK..."
+          flutter build apk --debug
+          echo "Building Release APK..."
+          flutter build apk --release --no-tree-shake-icons
 
       - name: Build Release AAB
         run: |
           cd mobile
-          flutter build appbundle --release --no-tree-shake-icons -v
+          flutter build appbundle --release --no-tree-shake-icons
 
-      - name: Upload APK Artifact
+      - name: Upload APK Artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: box-blast-2d-apk
+          name: box-blast-2d-apks
           path: mobile/build/app/outputs/flutter-apk/*.apk
 
       - name: Upload AAB Artifact
