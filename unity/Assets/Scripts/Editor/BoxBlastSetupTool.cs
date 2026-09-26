@@ -42,10 +42,13 @@ namespace BoxBlast2D.Editor
             Sprite block = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/block.png");
             Sprite ice = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/ice.png");
             Sprite relic = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/relic.png");
+            Sprite boardFrame = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/board_frame.png");
+            Sprite dockTray = AssetDatabase.LoadAssetAtPath<Sprite>("Assets/Sprites/dock_tray.png");
 
             // 4. Create BoardView
             GameObject boardObj = new GameObject("BoardView");
             var boardView = boardObj.AddComponent<BoardView>();
+            SetPrivateField(boardView, "boardFrameSprite", boardFrame);
             SetPrivateField(boardView, "cellBgSprite", cellBg);
             SetPrivateField(boardView, "blockSprite", block);
             SetPrivateField(boardView, "iceSprite", ice);
@@ -55,6 +58,7 @@ namespace BoxBlast2D.Editor
             GameObject handTrayObj = new GameObject("HandTray");
             var handTray = handTrayObj.AddComponent<HandTrayController>();
             SetPrivateField(handTray, "blockSprite", block);
+            SetPrivateField(handTray, "dockTraySprite", dockTray);
 
             // 6. Create BoosterManager
             GameObject boosterObj = new GameObject("BoosterManager");
@@ -180,29 +184,82 @@ namespace BoxBlast2D.Editor
 
         private static void SetupCanvasUI(GameObject canvasObj, UIManager uiManager)
         {
-            // Top HUD
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+
+            // Top HUD Container
             GameObject topHud = new GameObject("TopHUD");
             topHud.transform.SetParent(canvasObj.transform, false);
             RectTransform rtTop = topHud.AddComponent<RectTransform>();
             rtTop.anchorMin = new Vector2(0, 1);
             rtTop.anchorMax = new Vector2(1, 1);
             rtTop.pivot = new Vector2(0.5f, 1);
-            rtTop.sizeDelta = new Vector2(0, 220);
+            rtTop.sizeDelta = new Vector2(0, 260);
 
-            // Score Text
+            // 1. Hero Score Text
             GameObject scoreObj = new GameObject("ScoreText");
             scoreObj.transform.SetParent(topHud.transform, false);
             Text scoreTxt = scoreObj.AddComponent<Text>();
-            scoreTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            scoreTxt.fontSize = 72;
+            scoreTxt.font = font;
+            scoreTxt.fontStyle = FontStyle.Bold;
+            scoreTxt.fontSize = 84;
             scoreTxt.alignment = TextAnchor.MiddleCenter;
             scoreTxt.color = Color.white;
             scoreTxt.text = "0";
             RectTransform rtScore = scoreObj.GetComponent<RectTransform>();
-            rtScore.anchoredPosition = new Vector2(0, -60);
-            rtScore.sizeDelta = new Vector2(400, 100);
+            rtScore.anchoredPosition = new Vector2(0, -65);
+            rtScore.sizeDelta = new Vector2(500, 100);
+
+            // 2. Best Record Pill Card
+            GameObject pillObj = new GameObject("BestRecordPill");
+            pillObj.transform.SetParent(topHud.transform, false);
+            RectTransform rtPill = pillObj.AddComponent<RectTransform>();
+            rtPill.anchoredPosition = new Vector2(0, -132);
+            rtPill.sizeDelta = new Vector2(240, 46);
+            Image pillImg = pillObj.AddComponent<Image>();
+            pillImg.color = new Color(0.12f, 0.14f, 0.19f, 0.95f); // #1f2330 card
+
+            GameObject bestTxtObj = new GameObject("BestScoreText");
+            bestTxtObj.transform.SetParent(pillObj.transform, false);
+            Text bestTxt = bestTxtObj.AddComponent<Text>();
+            bestTxt.font = font;
+            bestTxt.fontSize = 26;
+            bestTxt.fontStyle = FontStyle.Bold;
+            bestTxt.alignment = TextAnchor.MiddleCenter;
+            bestTxt.color = new Color(0.015f, 0.67f, 0.43f); // #04AA6D emerald
+            bestTxt.text = "👑 BEST 0";
+            RectTransform rtBest = bestTxtObj.GetComponent<RectTransform>();
+            rtBest.anchorMin = Vector2.zero;
+            rtBest.anchorMax = Vector2.one;
+            rtBest.sizeDelta = Vector2.zero;
+
+            // 3. Combo Badge
+            GameObject comboObj = new GameObject("ComboBadge");
+            comboObj.transform.SetParent(topHud.transform, false);
+            RectTransform rtCombo = comboObj.AddComponent<RectTransform>();
+            rtCombo.anchoredPosition = new Vector2(0, -195);
+            rtCombo.sizeDelta = new Vector2(220, 44);
+            Image comboImg = comboObj.AddComponent<Image>();
+            comboImg.color = new Color(0.015f, 0.67f, 0.43f, 1f); // #04AA6D
+
+            GameObject comboTxtObj = new GameObject("ComboText");
+            comboTxtObj.transform.SetParent(comboObj.transform, false);
+            Text comboTxt = comboTxtObj.AddComponent<Text>();
+            comboTxt.font = font;
+            comboTxt.fontStyle = FontStyle.Bold;
+            comboTxt.fontSize = 24;
+            comboTxt.alignment = TextAnchor.MiddleCenter;
+            comboTxt.color = Color.white;
+            comboTxt.text = "COMBO 2x!";
+            RectTransform rtComboTxt = comboTxtObj.GetComponent<RectTransform>();
+            rtComboTxt.anchorMin = Vector2.zero;
+            rtComboTxt.anchorMax = Vector2.one;
+            rtComboTxt.sizeDelta = Vector2.zero;
+            comboObj.SetActive(false);
 
             SetPrivateField(uiManager, "scoreText", scoreTxt);
+            SetPrivateField(uiManager, "bestScoreText", bestTxt);
+            SetPrivateField(uiManager, "comboBadge", comboObj);
+            SetPrivateField(uiManager, "comboText", comboTxt);
             SetPrivateField(uiManager, "classicHud", topHud);
         }
 

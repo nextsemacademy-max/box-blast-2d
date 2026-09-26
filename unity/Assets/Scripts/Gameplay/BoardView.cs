@@ -9,12 +9,13 @@ namespace BoxBlast2D.Gameplay
         public static BoardView Instance { get; private set; }
 
         [Header("Grid Layout Settings")]
-        [SerializeField] private float cellSize = 0.76f;
-        [SerializeField] private float cellSpacing = 0.08f;
-        [SerializeField] private Vector2 boardCenter = new Vector2(0f, 0.6f);
+        [SerializeField] private float cellSize = 0.66f;
+        [SerializeField] private float cellSpacing = 0.05f;
+        [SerializeField] private Vector2 boardCenter = new Vector2(0f, 0.75f);
 
         [Header("Cell Prefab & Sprites")]
         [SerializeField] private GameObject cellPrefab;
+        [SerializeField] private Sprite boardFrameSprite;
         [SerializeField] private Sprite cellBgSprite;
         [SerializeField] private Sprite blockSprite;
         [SerializeField] private Sprite iceSprite;
@@ -35,12 +36,28 @@ namespace BoxBlast2D.Gameplay
         public void InitializeGrid(GridEngine grid)
         {
             // Clear existing if any
-            for (int r = 0; r < transform.childCount; r++)
+            for (int r = transform.childCount - 1; r >= 0; r--)
             {
                 Destroy(transform.GetChild(r).gameObject);
             }
 
             float totalWidth = GridEngine.BoardSize * cellSize + (GridEngine.BoardSize - 1) * cellSpacing;
+
+            // Spawn Board Frame Container
+            if (boardFrameSprite != null)
+            {
+                GameObject frameObj = new GameObject("BoardFrame");
+                frameObj.transform.SetParent(transform);
+                frameObj.transform.position = new Vector3(boardCenter.x, boardCenter.y, 0f);
+                SpriteRenderer srFrame = frameObj.AddComponent<SpriteRenderer>();
+                srFrame.sprite = boardFrameSprite;
+                srFrame.sortingOrder = -2;
+                // 512px frame with 100 PPU is 5.12 units. Scale to cover totalWidth + padding
+                float targetFrameSize = totalWidth + 0.5f;
+                float frameScale = targetFrameSize / (boardFrameSprite.rect.width / boardFrameSprite.pixelsPerUnit);
+                frameObj.transform.localScale = Vector3.one * frameScale;
+            }
+
             float startX = boardCenter.x - totalWidth * 0.5f + cellSize * 0.5f;
             float startY = boardCenter.y + totalWidth * 0.5f - cellSize * 0.5f;
 

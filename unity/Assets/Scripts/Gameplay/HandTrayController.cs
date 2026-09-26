@@ -11,19 +11,40 @@ namespace BoxBlast2D.Gameplay
         [Header("Dock Layout")]
         [SerializeField] private Vector3[] slotPositions = new Vector3[]
         {
-            new Vector3(-2.2f, -3.8f, 0f),
-            new Vector3(0f, -3.8f, 0f),
-            new Vector3(2.2f, -3.8f, 0f)
+            new Vector3(-2.2f, -3.9f, 0f),
+            new Vector3(0f, -3.9f, 0f),
+            new Vector3(2.2f, -3.9f, 0f)
         };
 
         [Header("Sprites")]
         [SerializeField] private Sprite blockSprite;
+        [SerializeField] private Sprite dockTraySprite;
 
         private DraggablePiece[] activePieces = new DraggablePiece[3];
+        private GameObject[] dockPadObjects = new GameObject[3];
 
         private void Awake()
         {
             Instance = this;
+            SpawnDockPads();
+        }
+
+        private void SpawnDockPads()
+        {
+            if (dockTraySprite == null) return;
+            for (int i = 0; i < 3; i++)
+            {
+                if (dockPadObjects[i] == null)
+                {
+                    GameObject pad = new GameObject($"DockPad_{i}");
+                    pad.transform.SetParent(transform);
+                    pad.transform.position = slotPositions[i];
+                    SpriteRenderer sr = pad.AddComponent<SpriteRenderer>();
+                    sr.sprite = dockTraySprite;
+                    sr.sortingOrder = 2;
+                    dockPadObjects[i] = pad;
+                }
+            }
         }
 
         public void SpawnHand(GridEngine grid)
