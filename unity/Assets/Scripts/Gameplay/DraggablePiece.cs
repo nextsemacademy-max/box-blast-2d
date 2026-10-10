@@ -11,7 +11,7 @@ namespace BoxBlast2D.Gameplay
         public int SlotIndex { get; private set; }
 
         [Header("Drag Settings")]
-        [SerializeField] private float touchOffsetY = 1.35f; // Lifts piece above finger
+        [SerializeField] private float touchOffsetY = 1.35f; // Lifts piece above finger on mobile
         [SerializeField] private float dockScale = 0.65f;
         [SerializeField] private float dragScale = 1.0f;
 
@@ -21,6 +21,8 @@ namespace BoxBlast2D.Gameplay
         private List<SpriteRenderer> blockRenderers = new List<SpriteRenderer>();
         private Collider2D pieceCollider;
         private Coroutine snapbackCoroutine;
+
+        private static DraggablePiece activeDraggingPiece = null;
 
         public void Initialize(ShapeData shape, int slotIndex, Vector3 spawnDockPos, Sprite blockSprite)
         {
@@ -77,7 +79,7 @@ namespace BoxBlast2D.Gameplay
             if (pieceCollider == null)
             {
                 BoxCollider2D box = gameObject.AddComponent<BoxCollider2D>();
-                box.size = new Vector2(totalW, totalH);
+                box.size = new Vector2(Mathf.Max(totalW, 1.2f), Mathf.Max(totalH, 1.2f));
                 pieceCollider = box;
             }
         }
@@ -104,29 +106,77 @@ namespace BoxBlast2D.Gameplay
             }
         }
 
-        private void OnMouseDown()
+        private void Update()
+        {
+            if (mainCamera == null) mainCamera = Camera.main;
+            if (mainCamera == null) return;
+
+            if (activeDraggingPiece == null)
+            {
+                if (Input.GetMouseButtonDown(0))
+                {
+                    Vector3 mouseWorld3 = mainCamera.ScreenToWorldPoint(Input.mousePosition);
+                    Vector2 mouseWorld = new Vector2(mouseWorld3.x, mouseWorld3.y);
+
+                    bool hit = false;
+                    if (pieceCollider != null && pieceCollider.OverlapPoint(mouseWorld))
+                    {
+                        hit = true;
+                    }
+                    else
+                    {
+                        float grabRadius = Mathf.Max(shapeWidth(Shape), shapeHeight(Shape)) * (BoardView.Instance != null ? BoardView.Instance.StepSize : 0.84f) * 0.5f * dockScale + 0.4f;
+                        if (Vector2.Distance(mouseWorld, transform.position) <= grabRadius)
+                        {
+                            hit = true;
+                        }
+                    }
+
+                    if (hit)
+                    {
+                        StartDrag();
+                    }
+                }
+            }
+            else if (activeDraggingPiece == this)
+            {
+                if (Input.GetMouseButton(0))
+                {
+                    ContinueDrag();
+                }
+                else if (Input.GetMouseButtonUp(0))
+                {
+                    EndDrag();
+                }
+            }
+        }
+
+        private void StartDrag()
         {
             if (snapbackCoroutine != null) StopCoroutine(snapbackCoroutine);
 
+            activeDraggingPiece = this;
             isDragging = true;
             transform.localScale = Vector3.one * dragScale;
 
             UpdateSortingOrder(25);
             Audio.SoundManager.Instance?.PlayPickup();
             UpdatePositionWithPointer();
+            CheckGhostPlacement();
         }
 
-        private void OnMouseDrag()
+        private void ContinueDrag()
         {
             if (!isDragging) return;
             UpdatePositionWithPointer();
             CheckGhostPlacement();
         }
 
-        private void OnMouseUp()
+        private void EndDrag()
         {
             if (!isDragging) return;
             isDragging = false;
+            activeDraggingPiece = null;
             UpdateSortingOrder(10);
 
             BoardView.Instance?.ClearGhostPreview();
@@ -136,7 +186,7 @@ namespace BoxBlast2D.Gameplay
             if (targetGridPos.HasValue && GameManager.Instance != null &&
                 GameManager.Instance.TryPlacePiece(this, targetGridPos.Value.x, targetGridPos.Value.y))
             {
-                // Successfully placed! HandTray will destroy or recycle this piece
+                // Successfully placed!
                 Destroy(gameObject);
             }
             else
@@ -149,10 +199,12 @@ namespace BoxBlast2D.Gameplay
         private void UpdatePositionWithPointer()
         {
             if (mainCamera == null) mainCamera = Camera.main;
+            if (mainCamera == null) return;
+
             Vector3 mouseWorld = mainCamera.ScreenToWorldPoint(Input.mousePosition);
             mouseWorld.z = 0f;
-            // Apply upward touch offset so thumb doesn't hide the shape
-            mouseWorld.y += touchOffsetY;
+            float offsetY = Application.isMobilePlatform ? touchOffsetY : 0.35f;
+            mouseWorld.y += offsetY;
             transform.position = mouseWorld;
         }
 
@@ -204,7 +256,6 @@ namespace BoxBlast2D.Gameplay
             {
                 elapsed += Time.deltaTime;
                 float t = elapsed / duration;
-                // Smooth ease-out
                 float smoothT = 1f - Mathf.Pow(1f - t, 3f);
                 transform.position = Vector3.Lerp(startPos, dockPosition, smoothT);
                 transform.localScale = Vector3.Lerp(startScale, targetScale, smoothT);
@@ -214,6 +265,16 @@ namespace BoxBlast2D.Gameplay
             transform.position = dockPosition;
             transform.localScale = targetScale;
             snapbackCoroutine = null;
+        }
+
+        private void OnDisable()
+        {
+            if (activeDraggingPiece == this) activeDraggingPiece = null;
+        }
+
+        private void OnDestroy()
+        {
+            if (activeDraggingPiece == this) activeDraggingPiece = null;
         }
     }
 }

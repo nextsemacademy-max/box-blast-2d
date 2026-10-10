@@ -50,6 +50,7 @@ namespace BoxBlast2D.Juice
             GameObject pObj = new GameObject("DefaultBlockParticles");
             pObj.transform.SetParent(transform);
             defaultSystem = pObj.AddComponent<ParticleSystem>();
+            defaultSystem.Stop(true, ParticleSystemStopBehavior.StopEmittingAndClear);
 
             var main = defaultSystem.main;
             main.playOnAwake = false;

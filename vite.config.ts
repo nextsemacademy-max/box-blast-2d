@@ -5,6 +5,9 @@ export default defineConfig({
   server: {
     port: 5174,
     host: true,
+    watch: {
+      ignored: ['**/unity/**', '**/mobile/**'],
+    },
   },
   build: {
     target: 'esnext',
